@@ -81,6 +81,17 @@ const TENANT_TYPES = [
   'Full Family',
 ];
 
+function createEmptyRoom() {
+  return {
+    roomName: '',
+    roomSize: '',
+    roomCount: '1',
+    roomBhk: '1BHK',
+    roomFloor: '',
+    roomRent: '',
+  };
+}
+
 function createEmptyProperty() {
   return {
     propertyName: '',
@@ -103,6 +114,8 @@ function createEmptyProperty() {
     bookingAdvance: '',
     bookingValidityDays: '',
     amenities: [],
+    mode: 'full', // full | room
+    rooms: [createEmptyRoom()],
     // Tenant rules & preferences
     drinksPolicy: 'not_allowed',
     smokingPolicy: 'not_allowed',
@@ -203,6 +216,28 @@ export default function PropertyScreen({ navigation }) {
     updateActiveProperty({ amenities: next });
   };
 
+  const updateRoom = (roomIndex, patch) => {
+    setProperties((prev) => {
+      const next = [...prev];
+      const current = next[activeIndex] || {};
+      const rooms = current.rooms ? [...current.rooms] : [];
+      rooms[roomIndex] = { ...rooms[roomIndex], ...patch };
+      next[activeIndex] = { ...current, rooms };
+      return next;
+    });
+  };
+
+  const addRoom = () => {
+    setProperties((prev) => {
+      const next = [...prev];
+      const current = next[activeIndex] || {};
+      const rooms = current.rooms ? [...current.rooms] : [];
+      rooms.push(createEmptyRoom());
+      next[activeIndex] = { ...current, rooms };
+      return next;
+    });
+  };
+
   const toggleTenantType = (name) => {
     const current = activeProperty.preferredTenantTypes || [];
     const exists = current.includes(name);
@@ -255,6 +290,8 @@ export default function PropertyScreen({ navigation }) {
 
   const showAddMore = properties.length >= 1;
 
+  const rooms = activeProperty.rooms || [];
+
   return (
     <ScreenLayout
       title="Property"
@@ -304,6 +341,20 @@ export default function PropertyScreen({ navigation }) {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Property Details</Text>
 
+          <Text style={styles.fieldLabel}>Mode</Text>
+          <View style={styles.chipRow}>
+            <Chip
+              label="Full Property"
+              selected={activeProperty.mode === 'full'}
+              onPress={() => updateActiveProperty({ mode: 'full' })}
+            />
+            <Chip
+              label="Room-wise"
+              selected={activeProperty.mode === 'room'}
+              onPress={() => updateActiveProperty({ mode: 'room' })}
+            />
+          </View>
+
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Property Name</Text>
             <TextInput
@@ -341,16 +392,18 @@ export default function PropertyScreen({ navigation }) {
           </View>
 
           <Text style={styles.fieldLabel}>Configuration</Text>
-          <View style={styles.chipRow}>
-            {BHK_OPTIONS.map((bhk) => (
-              <Chip
-                key={bhk}
-                label={bhk}
-                selected={activeProperty.bhk === bhk}
-                onPress={() => updateActiveProperty({ bhk })}
-              />
-            ))}
-          </View>
+          {activeProperty.mode === 'full' && (
+            <View style={styles.chipRow}>
+              {BHK_OPTIONS.map((bhk) => (
+                <Chip
+                  key={bhk}
+                  label={bhk}
+                  selected={activeProperty.bhk === bhk}
+                  onPress={() => updateActiveProperty({ bhk })}
+                />
+              ))}
+            </View>
+          )}
 
           <Text style={styles.fieldLabel}>Furnishing</Text>
           <View style={styles.chipRow}>
@@ -364,7 +417,8 @@ export default function PropertyScreen({ navigation }) {
             ))}
           </View>
 
-          {activeProperty.listingType === 'rent' || activeProperty.listingType === 'pg' ? (
+          {activeProperty.mode === 'full' &&
+          (activeProperty.listingType === 'rent' || activeProperty.listingType === 'pg') ? (
             <View style={styles.fieldGroupRow}>
               <View style={[styles.fieldGroup, styles.flex1]}>
                 <Text style={styles.fieldLabel}>For Rent Room</Text>
@@ -381,29 +435,133 @@ export default function PropertyScreen({ navigation }) {
             </View>
           ) : null}
 
-          <Text style={styles.fieldLabel}>Floor</Text>
-          <View style={styles.chipRow}>
-            {FLOOR_OPTIONS.map((floor) => (
-              <Chip
-                key={floor}
-                label={floor}
-                selected={activeProperty.floor === floor}
-                onPress={() => updateActiveProperty({ floor, customFloor: '' })}
-              />
-            ))}
-          </View>
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Or enter floor manually</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. 7th"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={activeProperty.customFloor}
-              onChangeText={(text) =>
-                updateActiveProperty({ customFloor: text, floor: '' })
-              }
-            />
-          </View>
+          {activeProperty.mode === 'full' && (
+            <>
+              <Text style={styles.fieldLabel}>Floor</Text>
+              <View style={styles.chipRow}>
+                {FLOOR_OPTIONS.map((floor) => (
+                  <Chip
+                    key={floor}
+                    label={floor}
+                    selected={activeProperty.floor === floor}
+                    onPress={() => updateActiveProperty({ floor, customFloor: '' })}
+                  />
+                ))}
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Or enter floor manually</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 7th"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={activeProperty.customFloor}
+                  onChangeText={(text) =>
+                    updateActiveProperty({ customFloor: text, floor: '' })
+                  }
+                />
+              </View>
+            </>
+          )}
+
+          {activeProperty.mode === 'room' && (
+            <View style={styles.roomSection}>
+              <Text style={styles.subSectionTitle}>Room-wise Details</Text>
+              {rooms.map((room, index) => (
+                <View key={index} style={styles.roomCard}>
+                  <Text style={styles.roomTitle}>{`Room ${index + 1}`}</Text>
+
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Room name / label</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. Front Room, Balcony Room"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={room.roomName}
+                      onChangeText={(text) =>
+                        updateRoom(index, { roomName: text })
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.fieldGroupRow}>
+                    <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
+                      <Text style={styles.fieldLabel}>Size of room</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 10x12 ft"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={room.roomSize}
+                        onChangeText={(text) =>
+                          updateRoom(index, { roomSize: text })
+                        }
+                      />
+                    </View>
+                    <View style={[styles.fieldGroup, styles.flex1]}>
+                      <Text style={styles.fieldLabel}>Number of this room</Text>
+                      <TextInput
+                        style={styles.input}
+                        keyboardType="numeric"
+                        placeholder="1"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={room.roomCount}
+                        onChangeText={(text) =>
+                          updateRoom(index, { roomCount: text })
+                        }
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Configuration (BHK)</Text>
+                  <View style={styles.chipRow}>
+                    {BHK_OPTIONS.map((bhk) => (
+                      <Chip
+                        key={bhk}
+                        label={bhk}
+                        selected={room.roomBhk === bhk}
+                        onPress={() => updateRoom(index, { roomBhk: bhk })}
+                      />
+                    ))}
+                  </View>
+
+                  <View style={styles.fieldGroupRow}>
+                    <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
+                      <Text style={styles.fieldLabel}>Floor</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 1st, 2nd"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={room.roomFloor}
+                        onChangeText={(text) =>
+                          updateRoom(index, { roomFloor: text })
+                        }
+                      />
+                    </View>
+                    <View style={[styles.fieldGroup, styles.flex1]}>
+                      <Text style={styles.fieldLabel}>Room rent</Text>
+                      <TextInput
+                        style={styles.input}
+                        keyboardType="numeric"
+                        placeholder="Rent for this room"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={room.roomRent}
+                        onChangeText={(text) =>
+                          updateRoom(index, { roomRent: text })
+                        }
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={styles.addRoomButton}
+                onPress={addRoom}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.addMoreLabel}>Add More Room</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Section 2: Financial details */}
