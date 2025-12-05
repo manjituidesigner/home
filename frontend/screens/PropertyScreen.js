@@ -51,6 +51,36 @@ const AMENITIES = [
   'Washing Machine',
 ];
 
+const LIFESTYLE_RULES = [
+  { id: 'drinksPolicy', label: 'Drinks' },
+  { id: 'smokingPolicy', label: 'Smoking' },
+  { id: 'lateNightPolicy', label: 'Late night coming' },
+];
+
+const RULE_OPTIONS = [
+  { id: 'not_allowed', label: 'Not Allowed' },
+  { id: 'allowed', label: 'Allowed' },
+  { id: 'conditional', label: 'With Conditions' },
+];
+
+const PARKING_TYPES = [
+  { id: 'none', label: 'No Parking' },
+  { id: 'bike', label: 'Bike Only' },
+  { id: 'car', label: 'Car Only' },
+  { id: 'both', label: 'Bike & Car' },
+];
+
+const TENANT_TYPES = [
+  'Married',
+  'Unmarried',
+  'Working Boys',
+  'Student Boys',
+  'Working Girls',
+  'Student Girls',
+  'Small Family',
+  'Full Family',
+];
+
 function createEmptyProperty() {
   return {
     propertyName: '',
@@ -73,6 +103,19 @@ function createEmptyProperty() {
     bookingAdvance: '',
     bookingValidityDays: '',
     amenities: [],
+    // Tenant rules & preferences
+    drinksPolicy: 'not_allowed',
+    smokingPolicy: 'not_allowed',
+    lateNightPolicy: 'not_allowed',
+    visitorsAllowed: 'no', // yes / no
+    visitorsMaxDays: '',
+    noticePeriodDays: '',
+    parkingType: 'none',
+    parkingBikeCount: '',
+    parkingCarCount: '',
+    preferredTenantTypes: [],
+    lateNightMode: 'anytime', // anytime | till_time
+    lateNightLastTime: '',
   };
 }
 
@@ -158,6 +201,51 @@ export default function PropertyScreen({ navigation }) {
       ? current.filter((a) => a !== name)
       : [...current, name];
     updateActiveProperty({ amenities: next });
+  };
+
+  const toggleTenantType = (name) => {
+    const current = activeProperty.preferredTenantTypes || [];
+    const exists = current.includes(name);
+    const next = exists
+      ? current.filter((t) => t !== name)
+      : [...current, name];
+    updateActiveProperty({ preferredTenantTypes: next });
+  };
+
+  const buildTenantSummary = () => {
+    const parts = [];
+
+    if (activeProperty.preferredTenantTypes?.length) {
+      parts.push(
+        `Preferred: ${activeProperty.preferredTenantTypes.join(', ')}`,
+      );
+    }
+
+    const behaviourBits = [];
+    if (activeProperty.drinksPolicy === 'not_allowed') behaviourBits.push('no drinks');
+    if (activeProperty.smokingPolicy === 'not_allowed') behaviourBits.push('no smoking');
+
+    if (activeProperty.lateNightPolicy === 'not_allowed') {
+      behaviourBits.push('no late night coming');
+    } else if (activeProperty.lateNightPolicy === 'allowed') {
+      if (activeProperty.lateNightMode === 'till_time' && activeProperty.lateNightLastTime) {
+        behaviourBits.push(`late night allowed till ${activeProperty.lateNightLastTime}`);
+      } else {
+        behaviourBits.push('late night allowed');
+      }
+    } else if (activeProperty.lateNightPolicy === 'conditional') {
+      behaviourBits.push('late night with conditions');
+    }
+    if (behaviourBits.length) {
+      parts.push(behaviourBits.join(', '));
+    }
+
+    if (activeProperty.parkingType && activeProperty.parkingType !== 'none') {
+      parts.push('parking available');
+    }
+
+    if (!parts.length) return 'Set rules and preferences for ideal tenants.';
+    return parts.join(' · ');
   };
 
   const handleAddMoreProperty = () => {
@@ -478,6 +566,174 @@ export default function PropertyScreen({ navigation }) {
                 label={a}
                 selected={activeProperty.amenities?.includes(a)}
                 onPress={() => toggleAmenity(a)}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* Section 4: Tenant rules & preferences */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Tenant Rules & Preferences</Text>
+          <Text style={styles.summaryText}>{buildTenantSummary()}</Text>
+
+          {/* Lifestyle / behaviour */}
+          <Text style={styles.subSectionTitle}>Behaviour Preferences</Text>
+          {LIFESTYLE_RULES.map((rule) => (
+            <View key={rule.id} style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>{rule.label}</Text>
+              <View style={styles.chipRow}>
+                {RULE_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt.id}
+                    label={opt.label}
+                    selected={activeProperty[rule.id] === opt.id}
+                    onPress={() => updateActiveProperty({ [rule.id]: opt.id })}
+                  />
+                ))}
+              </View>
+
+              {rule.id === 'lateNightPolicy' &&
+                activeProperty.lateNightPolicy === 'allowed' && (
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Late night details</Text>
+                    <View style={styles.chipRow}>
+                      <Chip
+                        label="Any time"
+                        selected={activeProperty.lateNightMode === 'anytime'}
+                        onPress={() =>
+                          updateActiveProperty({ lateNightMode: 'anytime', lateNightLastTime: '' })
+                        }
+                      />
+                      <Chip
+                        label="Till specific time"
+                        selected={activeProperty.lateNightMode === 'till_time'}
+                        onPress={() =>
+                          updateActiveProperty({ lateNightMode: 'till_time' })
+                        }
+                      />
+                    </View>
+
+                    {activeProperty.lateNightMode === 'till_time' && (
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Last time to come home (e.g. 11:30 PM)"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        value={activeProperty.lateNightLastTime}
+                        onChangeText={(text) =>
+                          updateActiveProperty({ lateNightLastTime: text })
+                        }
+                      />
+                    )}
+                  </View>
+                )}
+            </View>
+          ))}
+
+          {/* Visitors & notice period */}
+          <Text style={styles.subSectionTitle}>Visitors & Stay Rules</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Relatives or Friends Allowed</Text>
+            <View style={styles.chipRow}>
+              <Chip
+                label="Allowed"
+                selected={activeProperty.visitorsAllowed === 'yes'}
+                onPress={() => updateActiveProperty({ visitorsAllowed: 'yes' })}
+              />
+              <Chip
+                label="Not Allowed"
+                selected={activeProperty.visitorsAllowed === 'no'}
+                onPress={() => updateActiveProperty({ visitorsAllowed: 'no' })}
+              />
+            </View>
+          </View>
+
+          {activeProperty.visitorsAllowed === 'yes' && (
+            <View style={styles.fieldGroupRow}>
+              <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
+                <Text style={styles.fieldLabel}>Max visitor days (per month)</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  placeholder="e.g. 5"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={activeProperty.visitorsMaxDays}
+                  onChangeText={(text) =>
+                    updateActiveProperty({ visitorsMaxDays: text })
+                  }
+                />
+              </View>
+            </View>
+          )}
+
+          <View style={styles.fieldGroupRow}>
+            <View style={[styles.fieldGroup, styles.flex1]}>
+              <Text style={styles.fieldLabel}>Notice time to leave home (days)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="Notice period in days"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={activeProperty.noticePeriodDays}
+                onChangeText={(text) =>
+                  updateActiveProperty({ noticePeriodDays: text })
+                }
+              />
+            </View>
+          </View>
+
+          {/* Parking rules */}
+          <Text style={styles.subSectionTitle}>Parking Rules</Text>
+          <View style={styles.chipRow}>
+            {PARKING_TYPES.map((p) => (
+              <Chip
+                key={p.id}
+                label={p.label}
+                selected={activeProperty.parkingType === p.id}
+                onPress={() => updateActiveProperty({ parkingType: p.id })}
+              />
+            ))}
+          </View>
+
+          {activeProperty.parkingType !== 'none' && (
+            <View style={styles.fieldGroupRow}>
+              <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
+                <Text style={styles.fieldLabel}>No. of bikes</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={activeProperty.parkingBikeCount}
+                  onChangeText={(text) =>
+                    updateActiveProperty({ parkingBikeCount: text })
+                  }
+                />
+              </View>
+              <View style={[styles.fieldGroup, styles.flex1]}>
+                <Text style={styles.fieldLabel}>No. of cars</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={activeProperty.parkingCarCount}
+                  onChangeText={(text) =>
+                    updateActiveProperty({ parkingCarCount: text })
+                  }
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Preferred tenant type */}
+          <Text style={styles.subSectionTitle}>Preferred Tenant Type</Text>
+          <View style={styles.chipRowWrap}>
+            {TENANT_TYPES.map((t) => (
+              <Chip
+                key={t}
+                label={t}
+                selected={activeProperty.preferredTenantTypes?.includes(t)}
+                onPress={() => toggleTenantType(t)}
               />
             ))}
           </View>
