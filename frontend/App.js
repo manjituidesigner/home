@@ -5,6 +5,7 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import LoginScreen from './screens/LoginScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
+<<<<<<< HEAD
 import PropertyScreen from './screens/PropertyScreen';
 import WishlistScreen from './screens/WishlistScreen';
 import TenentsScreen from './screens/TenentsScreen';
@@ -13,6 +14,8 @@ import SettingsScreen from './screens/SettingsScreen';
 import DocumentsScreen from './screens/DocumentsScreen';
 import AdsScreen from './screens/AdsScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
+=======
+>>>>>>> main
 import CustomDrawer from './components/CustomDrawer';
 
 const Stack = createNativeStackNavigator();
@@ -26,6 +29,7 @@ function MainDrawer() {
     >
       <Drawer.Screen name="Dashboard" component={DashboardScreen} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
+<<<<<<< HEAD
       <Drawer.Screen name="Property" component={PropertyScreen} />
       <Drawer.Screen name="Wishlist" component={WishlistScreen} />
       <Drawer.Screen name="Tenents" component={TenentsScreen} />
@@ -37,6 +41,12 @@ function MainDrawer() {
     </Drawer.Navigator>
   );
 }
+=======
+    </Drawer.Navigator>
+  );
+}
+
+>>>>>>> main
 export default function App() {
   return (
     <NavigationContainer>
