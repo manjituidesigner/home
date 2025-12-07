@@ -1,5 +1,4 @@
 import React from 'react';
-<<<<<<< HEAD
 import {
   SafeAreaView,
   View,
@@ -11,11 +10,10 @@ import {
 } from 'react-native';
 import theme from '../theme';
 
-export default function ScreenLayout({ title, children, headerRight, onPressMenu, showHeader = true }) {
+export default function ScreenLayout({ title, children, headerRight, onPressMenu }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-      {showHeader && (
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <View style={styles.logoWrapper}>
@@ -26,11 +24,9 @@ export default function ScreenLayout({ title, children, headerRight, onPressMenu
             <TouchableOpacity style={styles.iconButton}>
               <Text style={styles.iconLabel}>U</Text>
             </TouchableOpacity>
-            {onPressMenu ? (
-              <TouchableOpacity style={styles.iconButton} onPress={onPressMenu}>
-                <Text style={styles.iconLabel}>≡</Text>
-              </TouchableOpacity>
-            ) : null}
+            <TouchableOpacity style={styles.iconButton} onPress={onPressMenu}>
+              <Text style={styles.iconLabel}>≡</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -55,20 +51,6 @@ export default function ScreenLayout({ title, children, headerRight, onPressMenu
           </View>
         </View>
       </View>
-      )}
-=======
-import { SafeAreaView, View, Text, StatusBar, StyleSheet } from 'react-native';
-import theme from '../theme';
-
-export default function ScreenLayout({ title, children, headerRight }) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        {headerRight ? <View>{headerRight}</View> : null}
-      </View>
->>>>>>> main
       <View style={styles.content}>{children}</View>
     </SafeAreaView>
   );
@@ -80,19 +62,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-<<<<<<< HEAD
-=======
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
->>>>>>> main
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-<<<<<<< HEAD
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -109,14 +84,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-=======
->>>>>>> main
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: theme.colors.text,
-<<<<<<< HEAD
-    textAlign: 'left',
+    textAlign: 'center',
     flex: 1,
     marginHorizontal: theme.spacing.md,
   },
@@ -173,8 +145,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: theme.colors.text,
-=======
->>>>>>> main
   },
   content: {
     flex: 1,

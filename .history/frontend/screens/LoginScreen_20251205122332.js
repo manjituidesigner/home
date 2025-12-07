@@ -20,11 +20,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-<<<<<<< HEAD
     <ScreenLayout title="Login" showHeader={false}>
-=======
-    <ScreenLayout title="Login">
->>>>>>> main
       <View style={styles.container}>
         <View style={styles.heroBlock}>
           <Text style={styles.heroTitle}>Welcome back</Text>
@@ -73,11 +69,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-<<<<<<< HEAD
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-=======
->>>>>>> main
   },
   heroBlock: {
     marginBottom: theme.spacing.xl,
@@ -95,11 +88,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   formBlock: {
-<<<<<<< HEAD
     width: '100%',
     maxWidth: 420,
-=======
->>>>>>> main
     gap: theme.spacing.md,
   },
   fieldBlock: {

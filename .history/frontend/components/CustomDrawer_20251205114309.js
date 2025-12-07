@@ -4,7 +4,6 @@ import { DrawerContentScrollView } from '@react-navigation/drawer';
 import theme from '../theme';
 
 export default function CustomDrawer(props) {
-<<<<<<< HEAD
   const { state, navigation } = props;
 
   const menuItems = [
@@ -31,12 +30,6 @@ export default function CustomDrawer(props) {
     if (targetRoute) {
       navigation.navigate(itemKey);
     }
-=======
-  const { state, descriptors, navigation } = props;
-
-  const handleNavigate = (routeName) => {
-    navigation.navigate(routeName);
->>>>>>> main
   };
 
   const handleLogout = () => {
@@ -58,7 +51,6 @@ export default function CustomDrawer(props) {
       >
         <View style={styles.menuBlock}>
           <Text style={styles.menuTitle}>Menu</Text>
-<<<<<<< HEAD
           {menuItems.map((item) => {
             const focused = state.routes[state.index]?.name === item.key;
             const isLogout = item.key === 'Logout';
@@ -101,33 +93,11 @@ export default function CustomDrawer(props) {
                     {item.label}
                   </Text>
                 </View>
-=======
-          {state.routes.map((route, index) => {
-            const focused = index === state.index;
-            const label = descriptors[route.key].options.drawerLabel ?? route.name;
-            return (
-              <TouchableOpacity
-                key={route.key}
-                onPress={() => handleNavigate(route.name)}
-                style={[styles.menuItem, focused && styles.menuItemFocused]}
-              >
-                <Text style={[styles.menuLabel, focused && styles.menuLabelFocused]}>
-                  {label}
-                </Text>
->>>>>>> main
               </TouchableOpacity>
             );
           })}
         </View>
       </DrawerContentScrollView>
-<<<<<<< HEAD
-=======
-      <View style={styles.logoutBlock}>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutLabel}>Logout</Text>
-        </TouchableOpacity>
-      </View>
->>>>>>> main
     </View>
   );
 }
@@ -160,7 +130,6 @@ const styles = StyleSheet.create({
   menuItemFocused: {
     backgroundColor: '#E8F5FD',
   },
-<<<<<<< HEAD
   menuItemLogout: {
     marginTop: 16,
   },
@@ -194,8 +163,6 @@ const styles = StyleSheet.create({
   iconGlyphLogout: {
     color: '#b91c1c',
   },
-=======
->>>>>>> main
   menuLabel: {
     fontSize: 15,
     color: theme.colors.text,
@@ -204,25 +171,4 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600',
   },
-<<<<<<< HEAD
-=======
-  logoutBlock: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  logoutButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: '#ef4444',
-    alignItems: 'center',
-  },
-  logoutLabel: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
->>>>>>> main
 });
