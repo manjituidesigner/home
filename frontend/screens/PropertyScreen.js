@@ -6,6 +6,7 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
@@ -196,6 +197,7 @@ function Chip({ label, selected, onPress }) {
 export default function PropertyScreen({ navigation }) {
   const [properties, setProperties] = useState([createEmptyProperty()]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [saving, setSaving] = useState(false);
 
   const activeProperty = properties[activeIndex];
 
@@ -281,6 +283,45 @@ export default function PropertyScreen({ navigation }) {
 
     if (!parts.length) return 'Set rules and preferences for ideal tenants.';
     return parts.join(' · ');
+  };
+
+  const handleSaveProperty = async () => {
+    console.log('handleSaveProperty called with', activeProperty);
+    if (!activeProperty.propertyName) {
+      Alert.alert('Validation', 'Please enter a property name.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const response = await fetch('http://localhost:5000/api/properties', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(activeProperty),
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to save property.';
+        try {
+          const errorBody = await response.json();
+          if (errorBody && errorBody.message) {
+            message = errorBody.message;
+          }
+        } catch (e) {}
+        Alert.alert('Error', message);
+        return;
+      }
+
+      await response.json();
+      Alert.alert('Success', 'Property saved successfully.');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to save property. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAddMoreProperty = () => {
@@ -895,6 +936,12 @@ export default function PropertyScreen({ navigation }) {
               />
             ))}
           </View>
+          <TouchableOpacity
+            style={styles.saveButton}
+            onPress={handleSaveProperty}
+          >
+            <Text style={styles.saveButtonLabel}>Save Property</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </ScreenLayout>
@@ -1092,5 +1139,18 @@ const styles = StyleSheet.create({
   },
   mr8: {
     marginRight: 8,
+  },
+  saveButton: {
+    marginTop: theme.spacing.md,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });
