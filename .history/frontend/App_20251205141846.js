@@ -37,7 +37,6 @@ function MainDrawer() {
     </Drawer.Navigator>
   );
 }
-
 export default function App() {
   return (
     <NavigationContainer>
