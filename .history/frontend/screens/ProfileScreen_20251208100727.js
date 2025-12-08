@@ -646,7 +646,6 @@ export default function ProfileScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
         )}
-      </ScrollView>
     </ScreenLayout>
   );
 }

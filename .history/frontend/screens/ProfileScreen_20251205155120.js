@@ -19,7 +19,7 @@ import theme from '../theme';
 const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
 
 export default function ProfileScreen({ navigation }) {
-  const [isEditing, setIsEditing] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
@@ -414,8 +414,35 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
-  // Header actions are rendered inside the screen header instead of using
-  // the navigation header (which is hidden in this stack).
+  // Set header right button
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        isEditing ? (
+          <TouchableOpacity
+            style={styles.saveHeaderButton}
+            onPress={isProfileComplete ? handleUpdate : handleSave}
+            disabled={!isProfileComplete}
+          >
+            <Text
+              style={[
+                styles.saveHeaderButtonText,
+                !isProfileComplete && { opacity: 0.5 },
+              ]}
+            >
+              {isProfileComplete ? 'Update' : 'Save'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.saveHeaderButton}
+            onPress={() => setIsEditing(true)}
+          >
+            <Text style={styles.saveHeaderButtonText}>Edit</Text>
+          </TouchableOpacity>
+        ),
+    });
+  }, [navigation, isEditing, isProfileComplete]);
 
   // Load saved data on mount
   useEffect(() => {
@@ -479,23 +506,7 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.headerActions}>
-            {isEditing ? (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={isProfileComplete ? handleUpdate : handleSave}
-                disabled={!isProfileComplete}
-              >
-                <Ionicons name="save" size={16} color="#fff" />
-                <Text
-                  style={[
-                    styles.editButtonText,
-                    !isProfileComplete && { opacity: 0.7 },
-                  ]}
-                >
-                  {isProfileComplete ? 'Update' : 'Save'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
+            {!isEditing && isProfileComplete && (
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={() => setIsEditing(true)}

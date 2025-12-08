@@ -148,6 +148,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: theme.colors.text,
   },
+  },
   content: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
