@@ -49,6 +49,12 @@ const PropertySchema = new mongoose.Schema(
     parkingBikeCount: { type: String, trim: true },
     parkingCarCount: { type: String, trim: true },
     preferredTenantTypes: [{ type: String, trim: true }],
+    // Availability status for listing visibility
+    status: {
+      type: String,
+      enum: ['available', 'occupied'],
+      default: 'available',
+    },
   },
   { timestamps: true }
 );

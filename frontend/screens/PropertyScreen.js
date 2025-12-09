@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -91,6 +91,29 @@ function createEmptyRoom() {
     roomFloor: '',
     roomRent: '',
   };
+
+  const togglePropertyStatus = async (item) => {
+    if (!item?._id) return;
+    const nextStatus = item.status === 'available' ? 'occupied' : 'available';
+    try {
+      const response = await fetch(`http://localhost:5001/api/properties/${item._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!response.ok) {
+        return;
+      }
+      const updated = await response.json();
+      setPropertyList((prev) =>
+        prev.map((p) => (p._id === updated._id ? updated : p)),
+      );
+    } catch (e) {
+      // ignore update errors for now
+    }
+  };
 }
 
 function createEmptyProperty() {
@@ -130,6 +153,7 @@ function createEmptyProperty() {
     preferredTenantTypes: [],
     lateNightMode: 'anytime', // anytime | till_time
     lateNightLastTime: '',
+    status: 'available',
   };
 }
 
@@ -198,6 +222,10 @@ export default function PropertyScreen({ navigation }) {
   const [properties, setProperties] = useState([createEmptyProperty()]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('add'); // 'add' | 'list'
+  const [propertyList, setPropertyList] = useState([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [editingPropertyId, setEditingPropertyId] = useState(null);
 
   const activeProperty = properties[activeIndex];
 
@@ -285,6 +313,61 @@ export default function PropertyScreen({ navigation }) {
     return parts.join(' · ');
   };
 
+  const buildTenantSummaryFor = (property) => {
+    const parts = [];
+
+    if (property.preferredTenantTypes?.length) {
+      parts.push(`Preferred: ${property.preferredTenantTypes.join(', ')}`);
+    }
+
+    const behaviourBits = [];
+    if (property.drinksPolicy === 'not_allowed') behaviourBits.push('no drinks');
+    if (property.smokingPolicy === 'not_allowed') behaviourBits.push('no smoking');
+
+    if (property.lateNightPolicy === 'not_allowed') {
+      behaviourBits.push('no late night coming');
+    } else if (property.lateNightPolicy === 'allowed') {
+      if (property.lateNightMode === 'till_time' && property.lateNightLastTime) {
+        behaviourBits.push(`late night allowed till ${property.lateNightLastTime}`);
+      } else {
+        behaviourBits.push('late night allowed');
+      }
+    } else if (property.lateNightPolicy === 'conditional') {
+      behaviourBits.push('late night with conditions');
+    }
+
+    if (behaviourBits.length) {
+      parts.push(behaviourBits.join(', '));
+    }
+
+    if (property.parkingType && property.parkingType !== 'none') {
+      parts.push('parking available');
+    }
+
+    if (!parts.length) return '';
+    return parts.join(' · ');
+  };
+
+  const fetchPropertyList = async () => {
+    try {
+      setLoadingList(true);
+      const response = await fetch('http://localhost:5001/api/properties');
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setPropertyList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      // ignore list load errors for now
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPropertyList();
+  }, []);
+
   const handleSaveProperty = async () => {
     console.log('handleSaveProperty called with', activeProperty);
     if (!activeProperty.propertyName) {
@@ -294,9 +377,15 @@ export default function PropertyScreen({ navigation }) {
 
     try {
       setSaving(true);
+      const isEditing = !!activeProperty._id || !!editingPropertyId;
+      const targetId = activeProperty._id || editingPropertyId;
+      const url = isEditing
+        ? `http://localhost:5001/api/properties/${targetId}`
+        : 'http://localhost:5001/api/properties';
+      const method = isEditing ? 'PUT' : 'POST';
 
-      const response = await fetch('http://localhost:5000/api/properties', {
-        method: 'POST',
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -315,8 +404,18 @@ export default function PropertyScreen({ navigation }) {
         return;
       }
 
-      await response.json();
-      Alert.alert('Success', 'Property saved successfully.');
+      const saved = await response.json();
+      Alert.alert('Success', isEditing ? 'Property updated successfully.' : 'Property saved successfully.');
+      setEditingPropertyId(null);
+      if (saved && saved._id) {
+        // ensure local form has latest copy including id
+        setProperties([{
+          ...createEmptyProperty(),
+          ...saved,
+        }]);
+      }
+      fetchPropertyList();
+      setActiveTab('list');
     } catch (error) {
       Alert.alert('Error', 'Unable to save property. Please try again.');
     } finally {
@@ -333,6 +432,19 @@ export default function PropertyScreen({ navigation }) {
 
   const rooms = activeProperty.rooms || [];
 
+  const startEditProperty = (item) => {
+    if (!item || !item._id) return;
+    const merged = {
+      ...createEmptyProperty(),
+      ...item,
+      rooms: item.rooms && item.rooms.length ? item.rooms : [createEmptyRoom()],
+    };
+    setProperties([merged]);
+    setActiveIndex(0);
+    setEditingPropertyId(item._id);
+    setActiveTab('add');
+  };
+
   return (
     <ScreenLayout
       title="Property"
@@ -343,41 +455,34 @@ export default function PropertyScreen({ navigation }) {
       }}
     >
       <View style={styles.tabsRow}>
-        {properties.map((_, index) => (
-          <TouchableOpacity
-            key={index}
-            onPress={() => setActiveIndex(index)}
-            style={[
-              styles.tab,
-              activeIndex === index && styles.tabActive,
-            ]}
+        <TouchableOpacity
+          onPress={() => setActiveTab('list')}
+          style={[styles.tab, activeTab === 'list' && styles.tabActive]}
+        >
+          <Text
+            style={[styles.tabLabel, activeTab === 'list' && styles.tabLabelActive]}
           >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeIndex === index && styles.tabLabelActive,
-              ]}
-            >
-              {`Property ${index + 1}`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {showAddMore && (
-          <TouchableOpacity
-            onPress={handleAddMoreProperty}
-            style={styles.addMoreButton}
+            My Property
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('add')}
+          style={[styles.tab, activeTab === 'add' && styles.tabActive]}
+        >
+          <Text
+            style={[styles.tabLabel, activeTab === 'add' && styles.tabLabelActive]}
           >
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.addMoreLabel}>Add More</Text>
-          </TouchableOpacity>
-        )}
+            Add New
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      {activeTab === 'add' ? (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Section 1: Basic details */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Property Details</Text>
@@ -944,6 +1049,127 @@ export default function PropertyScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {loadingList ? (
+            <Text style={styles.emptyText}>Loading properties...</Text>
+          ) : propertyList.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No properties found. Add a new property to get started.
+            </Text>
+          ) : (
+            propertyList.map((item, index) => {
+              const detailRows = [
+                { label: 'Rent Amount', value: item.rentAmount },
+                { label: 'Advance Rent', value: item.advanceAmount },
+                { label: 'Water Charges', value: item.waterCharges },
+                { label: 'Electricity / Unit', value: item.electricityPerUnit },
+                { label: 'Cleaning Charges', value: item.cleaningCharges },
+                { label: 'Food Charges', value: item.foodCharges },
+                { label: 'Yearly Maintenance', value: item.yearlyMaintenance },
+                { label: '% Increase after 1 year', value: item.yearlyIncreasePercent },
+                { label: 'Advance Booking Charges', value: item.bookingAdvance },
+                { label: 'Booking Validity (days)', value: item.bookingValidityDays },
+                { label: 'For Rent Room', value: item.rentRoomScope },
+                { label: 'Floor', value: item.floor || item.customFloor },
+                { label: 'Notice Period (days)', value: item.noticePeriodDays },
+              ].filter(row => row.value);
+
+              const amenitiesText =
+                Array.isArray(item.amenities) && item.amenities.length
+                  ? item.amenities.join(', ')
+                  : '';
+              const tenantSummary = buildTenantSummaryFor(item);
+
+              const derivedStatus = item.status || (index % 2 === 1 ? 'occupied' : 'available');
+              const isOccupied = derivedStatus === 'occupied';
+
+              return (
+                <View key={item._id} style={styles.propertyCard}>
+                  <View style={styles.propertyHeaderRow}>
+                    <View style={styles.propertyHeaderText}>
+                      <Text style={styles.propertyName}>
+                        {item.propertyName || 'Untitled Property'}
+                      </Text>
+                      <Text style={styles.propertySubtitle}>
+                        {item.category} • {item.listingType} • {item.bhk} • {item.furnishing}
+                      </Text>
+                      {isOccupied && (
+                        <Text style={styles.renterLabel}>
+                          Rented to: Demo Tenant
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.cardActionsColumn}>
+                      <TouchableOpacity
+                        disabled={isOccupied}
+                        onPress={() => startEditProperty(item)}
+                        style={[
+                          styles.editCardButton,
+                          isOccupied && styles.editCardButtonDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.editCardButtonLabel,
+                            isOccupied && styles.editCardButtonLabelDisabled,
+                          ]}
+                        >
+                          Edit
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => togglePropertyStatus({ ...item, status: derivedStatus })}
+                        style={[
+                          styles.statusPill,
+                          derivedStatus === 'available'
+                            ? styles.statusAvailable
+                            : styles.statusOccupied,
+                        ]}
+                      >
+                        <Text style={styles.statusText}>
+                          {derivedStatus === 'available'
+                            ? 'Open for Rent'
+                            : 'Occupied'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {detailRows.length > 0 && (
+                    <View style={styles.propertyDetailsSection}>
+                      {detailRows.map((row) => (
+                        <View key={row.label} style={styles.propertyMetaRow}>
+                          <Text style={styles.metaLabel}>{row.label}</Text>
+                          <Text style={styles.metaValue}>{row.value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {amenitiesText ? (
+                    <View style={styles.propertyDetailsSection}>
+                      <Text style={styles.metaSectionLabel}>Amenities</Text>
+                      <Text style={styles.metaValue}>{amenitiesText}</Text>
+                    </View>
+                  ) : null}
+
+                  {tenantSummary ? (
+                    <View style={styles.propertyDetailsSection}>
+                      <Text style={styles.metaSectionLabel}>Tenant Rules & Preferences</Text>
+                      <Text style={styles.metaValue}>{tenantSummary}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      )}
     </ScreenLayout>
   );
 }
@@ -1150,6 +1376,110 @@ const styles = StyleSheet.create({
   },
   saveButtonLabel: {
     fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  emptyText: {
+    marginTop: theme.spacing.lg,
+    textAlign: 'center',
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+  },
+  propertyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  propertyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  propertyHeaderText: {
+    flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  propertyName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  propertySubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+  },
+  renterLabel: {
+    marginTop: 2,
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  propertyDetailsSection: {
+    marginTop: 8,
+  },
+  propertyMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  metaLabel: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  metaValue: {
+    fontSize: 13,
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  metaSectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 2,
+  },
+  cardActionsColumn: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  editCardButton: {
+    marginBottom: 6,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+  },
+  editCardButtonDisabled: {
+    opacity: 0.4,
+  },
+  editCardButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  editCardButtonLabelDisabled: {
+    color: theme.colors.textSecondary,
+  },
+  statusPill: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusAvailable: {
+    backgroundColor: theme.colors.primary,
+  },
+  statusOccupied: {
+    backgroundColor: '#111827',
+  },
+  statusText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#ffffff',
   },
