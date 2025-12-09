@@ -48,4 +48,17 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+router.delete('/:id', async (req, res) => {
+  try {
+    const deleted = await propertyService.deleteProperty(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Property not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting property', err);
+    res.status(400).json({ message: 'Failed to delete property', error: err.message });
+  }
+});
+
 module.exports = router;

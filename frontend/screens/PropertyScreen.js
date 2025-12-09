@@ -7,6 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  Modal,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
@@ -92,29 +94,6 @@ function createEmptyRoom() {
     roomBhk: '1BHK',
     roomFloor: '',
     roomRent: '',
-  };
-
-  const togglePropertyStatus = async (item) => {
-    if (!item?._id) return;
-    const nextStatus = item.status === 'available' ? 'occupied' : 'available';
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/properties/${item._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      if (!response.ok) {
-        return;
-      }
-      const updated = await response.json();
-      setPropertyList((prev) =>
-        prev.map((p) => (p._id === updated._id ? updated : p)),
-      );
-    } catch (e) {
-      // ignore update errors for now
-    }
   };
 }
 
@@ -228,6 +207,9 @@ export default function PropertyScreen({ navigation }) {
   const [propertyList, setPropertyList] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [openMenuForId, setOpenMenuForId] = useState(null);
 
   const activeProperty = properties[activeIndex];
 
@@ -237,6 +219,30 @@ export default function PropertyScreen({ navigation }) {
       next[activeIndex] = { ...next[activeIndex], ...patch };
       return next;
     });
+  };
+
+  const togglePropertyStatus = async (item, currentStatus) => {
+    if (!item?._id) return;
+    const effectiveStatus = currentStatus || item.status || 'available';
+    const nextStatus = effectiveStatus === 'available' ? 'occupied' : 'available';
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/properties/${item._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!response.ok) {
+        return;
+      }
+      const updated = await response.json();
+      setPropertyList((prev) =>
+        prev.map((p) => (p._id === updated._id ? updated : p)),
+      );
+    } catch (e) {
+      // ignore update errors for now
+    }
   };
 
   const toggleAmenity = (name) => {
@@ -445,6 +451,69 @@ export default function PropertyScreen({ navigation }) {
     setActiveIndex(0);
     setEditingPropertyId(item._id);
     setActiveTab('add');
+  };
+
+  const confirmDeleteProperty = (item) => {
+    if (!item || !item._id) return;
+    setDeleteTarget(item);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || !deleteTarget._id) {
+      setShowDeleteModal(false);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/properties/${deleteTarget._id}`,
+        { method: 'DELETE' },
+      );
+      if (!response.ok) {
+        setShowDeleteModal(false);
+        return;
+      }
+      setPropertyList(prev => prev.filter(p => p._id !== deleteTarget._id));
+      fetchPropertyList();
+    } catch (e) {
+      // ignore delete errors for now
+    } finally {
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleShareProperty = async (item) => {
+    if (!item) return;
+    try {
+      const lines = [];
+      lines.push(`Property: ${item.propertyName || 'Untitled Property'}`);
+      lines.push(`Category: ${item.category}`);
+      lines.push(`Listing Type: ${item.listingType}`);
+      lines.push(`Configuration: ${item.bhk}`);
+      lines.push(`Furnishing: ${item.furnishing}`);
+      if (item.rentAmount) lines.push(`Rent: ${item.rentAmount}`);
+      if (item.advanceAmount) lines.push(`Advance: ${item.advanceAmount}`);
+      if (item.waterCharges) lines.push(`Water Charges: ${item.waterCharges}`);
+      if (item.electricityPerUnit) lines.push(`Electricity / Unit: ${item.electricityPerUnit}`);
+      if (item.cleaningCharges) lines.push(`Cleaning Charges: ${item.cleaningCharges}`);
+      if (item.foodCharges) lines.push(`Food Charges: ${item.foodCharges}`);
+      if (item.floor || item.customFloor) lines.push(`Floor: ${item.floor || item.customFloor}`);
+      if (Array.isArray(item.amenities) && item.amenities.length) {
+        lines.push(`Amenities: ${item.amenities.join(', ')}`);
+      }
+
+      const message = lines.join('\n');
+      const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Share', 'WhatsApp is not installed on this device.');
+      }
+    } catch (e) {
+      Alert.alert('Share', 'Unable to open WhatsApp.');
+    }
   };
 
   return (
@@ -1088,10 +1157,17 @@ export default function PropertyScreen({ navigation }) {
               const tenantSummary = buildTenantSummaryFor(item);
 
               const derivedStatus = item.status || (index % 2 === 1 ? 'occupied' : 'available');
-              const isOccupied = derivedStatus === 'occupied';
+              const isOpen = derivedStatus === 'available';
+              const isOccupied = !isOpen;
 
               return (
-                <View key={item._id} style={styles.propertyCard}>
+                <View
+                  key={item._id}
+                  style={[
+                    styles.propertyCard,
+                    !isOpen && styles.propertyCardClosed,
+                  ]}
+                >
                   <View style={styles.propertyHeaderRow}>
                     <View style={styles.propertyHeaderText}>
                       <Text style={styles.propertyName}>
@@ -1108,39 +1184,76 @@ export default function PropertyScreen({ navigation }) {
                     </View>
                     <View style={styles.cardActionsColumn}>
                       <TouchableOpacity
-                        disabled={isOccupied}
-                        onPress={() => startEditProperty(item)}
+                        onPress={() => togglePropertyStatus(item, derivedStatus)}
                         style={[
-                          styles.editCardButton,
-                          isOccupied && styles.editCardButtonDisabled,
+                          styles.statusPill,
+                          isOpen
+                            ? styles.statusAvailable
+                            : styles.statusOccupied,
                         ]}
+                      >
+                        <Text style={styles.statusText}>
+                          {isOpen ? 'Closed' : 'Open'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setOpenMenuForId(prev =>
+                            prev === item._id ? null : item._id,
+                          )
+                        }
+                        style={styles.moreButton}
+                      >
+                        <Ionicons
+                          name="ellipsis-vertical"
+                          size={18}
+                          color={theme.colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {openMenuForId === item._id && (
+                    <View style={styles.cardMenu}>
+                      <TouchableOpacity
+                        disabled={isOccupied}
+                        onPress={() => {
+                          setOpenMenuForId(null);
+                          if (!isOccupied) startEditProperty(item);
+                        }}
+                        style={styles.cardMenuItem}
                       >
                         <Text
                           style={[
-                            styles.editCardButtonLabel,
-                            isOccupied && styles.editCardButtonLabelDisabled,
+                            styles.cardMenuText,
+                            isOccupied && styles.cardMenuTextDisabled,
                           ]}
                         >
                           Edit
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        onPress={() => togglePropertyStatus({ ...item, status: derivedStatus })}
-                        style={[
-                          styles.statusPill,
-                          derivedStatus === 'available'
-                            ? styles.statusAvailable
-                            : styles.statusOccupied,
-                        ]}
+                        onPress={() => {
+                          setOpenMenuForId(null);
+                          confirmDeleteProperty(item);
+                        }}
+                        style={styles.cardMenuItem}
                       >
-                        <Text style={styles.statusText}>
-                          {derivedStatus === 'available'
-                            ? 'Open for Rent'
-                            : 'Occupied'}
+                        <Text style={[styles.cardMenuText, styles.cardMenuTextDelete]}>
+                          Delete
                         </Text>
                       </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setOpenMenuForId(null);
+                          handleShareProperty(item);
+                        }}
+                        style={styles.cardMenuItem}
+                      >
+                        <Text style={styles.cardMenuText}>Share</Text>
+                      </TouchableOpacity>
                     </View>
-                  </View>
+                  )}
 
                   {detailRows.length > 0 && (
                     <View style={styles.propertyDetailsSection}>
@@ -1172,6 +1285,39 @@ export default function PropertyScreen({ navigation }) {
           )}
         </ScrollView>
       )}
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete Property</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete this property?
+            </Text>
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeleteTarget(null);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalDeleteButton]}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.modalDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenLayout>
   );
 }
@@ -1395,6 +1541,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
+  propertyCardClosed: {
+    opacity: 0.5,
+  },
   propertyHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1446,12 +1595,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   cardActionsColumn: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   editCardButton: {
-    marginBottom: 6,
-    paddingHorizontal: theme.spacing.md,
+    marginLeft: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
@@ -1469,7 +1619,18 @@ const styles = StyleSheet.create({
   editCardButtonLabelDisabled: {
     color: theme.colors.textSecondary,
   },
+  deleteCardButton: {
+    marginLeft: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 6,
+  },
+  deleteCardButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#dc2626',
+  },
   statusPill: {
+    marginLeft: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 6,
     borderRadius: 999,
@@ -1479,6 +1640,93 @@ const styles = StyleSheet.create({
   },
   statusOccupied: {
     backgroundColor: '#111827',
+  },
+  moreButton: {
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 6,
+  },
+  cardMenu: {
+    position: 'absolute',
+    top: 40,
+    right: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: 4,
+    minWidth: 140,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    zIndex: 20,
+  },
+  cardMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  cardMenuText: {
+    fontSize: 14,
+    color: theme.colors.text,
+  },
+  cardMenuTextDisabled: {
+    color: theme.colors.textSecondary,
+  },
+  cardMenuTextDelete: {
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.md,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  modalButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginLeft: theme.spacing.sm,
+  },
+  modalCancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  modalDeleteButton: {
+    backgroundColor: '#dc2626',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  modalDeleteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   statusText: {
     fontSize: 12,
