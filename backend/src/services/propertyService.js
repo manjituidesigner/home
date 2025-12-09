@@ -21,9 +21,14 @@ async function listProperties() {
   return Property.find().sort({ createdAt: -1 });
 }
 
+async function deleteProperty(id) {
+  return Property.findByIdAndDelete(id);
+}
+
 module.exports = {
   createProperty,
   updateProperty,
   getPropertyById,
   listProperties,
+  deleteProperty,
 };
