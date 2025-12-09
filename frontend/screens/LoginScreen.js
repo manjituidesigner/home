@@ -54,7 +54,7 @@ export default function LoginScreen({ navigation }) {
     <ScreenLayout title="Login" showHeader={false}>
       <View style={styles.container}>
         <View style={styles.heroBlock}>
-          <Text style={styles.heroTitle}>Welcome Again</Text>
+          <Text style={styles.heroTitle}>Welcome Back </Text>
           <Text style={styles.heroSubtitle}>
             Sign in with the demo credentials to continue.
           </Text>
