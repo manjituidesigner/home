@@ -7,7 +7,7 @@ const propertyRoutes = require('./routes/propertyRoutes');
 dotenv.config();
 
 const app = express();
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/home_app';
 
 app.use(cors());
@@ -31,6 +31,5 @@ app.get('/api/health', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
-   
+  console.log(`Backend running on port ${PORT}`);
 });
