@@ -35,6 +35,7 @@ const PropertySchema = new mongoose.Schema(
     bookingAdvance: { type: String, trim: true },
     bookingValidityDays: { type: String, trim: true },
     amenities: [{ type: String, trim: true }],
+    photos: [{ type: String, trim: true }],
     rooms: { type: [RoomSchema], default: [] },
     // Tenant rules & preferences
     drinksPolicy: { type: String, enum: ['not_allowed', 'allowed', 'conditional'], default: 'not_allowed' },
@@ -49,6 +50,7 @@ const PropertySchema = new mongoose.Schema(
     parkingBikeCount: { type: String, trim: true },
     parkingCarCount: { type: String, trim: true },
     preferredTenantTypes: [{ type: String, trim: true }],
+    totalRooms: { type: String, trim: true },
     // Availability status for listing visibility
     status: {
       type: String,

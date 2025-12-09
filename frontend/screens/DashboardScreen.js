@@ -7,6 +7,7 @@ export default function DashboardScreen({ navigation }) {
   return (
     <ScreenLayout
       title="Dashboard"
+      showSearchRow
       onPressMenu={() => {
         if (navigation && navigation.openDrawer) {
           navigation.openDrawer();

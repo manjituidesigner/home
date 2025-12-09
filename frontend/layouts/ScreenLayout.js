@@ -10,7 +10,14 @@ import {
 } from 'react-native';
 import theme from '../theme';
 
-export default function ScreenLayout({ title, children, headerRight, onPressMenu, showHeader = true }) {
+export default function ScreenLayout({
+  title,
+  children,
+  headerRight,
+  onPressMenu,
+  showHeader = true,
+  showSearchRow = false,
+}) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
@@ -30,27 +37,28 @@ export default function ScreenLayout({ title, children, headerRight, onPressMenu
               ) : null}
             </View>
           </View>
-
-          <View style={styles.headerBottomRow}>
-            <View style={styles.searchContainer}>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search"
-                placeholderTextColor={theme.colors.textSecondary}
-              />
+          {showSearchRow && (
+            <View style={styles.headerBottomRow}>
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search"
+                  placeholderTextColor={theme.colors.textSecondary}
+                />
+              </View>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity style={styles.iconPill}>
+                  <Text style={styles.iconPillLabel}>W</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconPill}>
+                  <Text style={styles.iconPillLabel}>N</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconPill}>
+                  <Text style={styles.iconPillLabel}>F</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.actionsRow}>
-              <TouchableOpacity style={styles.iconPill}>
-                <Text style={styles.iconPillLabel}>W</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconPill}>
-                <Text style={styles.iconPillLabel}>N</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconPill}>
-                <Text style={styles.iconPillLabel}>F</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          )}
         </View>
       )}
       <View style={styles.content}>{children}</View>

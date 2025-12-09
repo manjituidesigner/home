@@ -9,7 +9,9 @@ import {
   Alert,
   Modal,
   Linking,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
@@ -100,11 +102,11 @@ function createEmptyRoom() {
 function createEmptyProperty() {
   return {
     propertyName: '',
-    // start with no pre-selected chips; user will choose
-    category: '',
-    listingType: '',
-    bhk: '',
-    furnishing: '',
+    // defaults aligned with backend Property schema enums
+    category: 'flat',
+    listingType: 'rent',
+    bhk: '1BHK',
+    furnishing: 'semi',
     rentRoomScope: '', // one room or all rooms
     floor: '',
     customFloor: '',
@@ -120,9 +122,10 @@ function createEmptyProperty() {
     bookingAdvance: '',
     bookingValidityDays: '',
     amenities: [],
-    mode: '', // full | room
+    photos: [],
+    mode: 'full', // full | room
     rooms: [createEmptyRoom()],
-    // Tenant rules & preferences
+    // Tenant rules & preferences (backend defaults)
     drinksPolicy: 'not_allowed',
     smokingPolicy: 'not_allowed',
     lateNightPolicy: 'not_allowed',
@@ -133,6 +136,7 @@ function createEmptyProperty() {
     parkingBikeCount: '',
     parkingCarCount: '',
     preferredTenantTypes: [],
+    totalRooms: '',
     lateNightMode: 'anytime', // anytime | till_time
     lateNightLastTime: '',
     status: 'available',
@@ -212,6 +216,7 @@ export default function PropertyScreen({ navigation }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [openMenuForId, setOpenMenuForId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all'); // all | available | occupied
 
   const activeProperty = properties[activeIndex];
 
@@ -356,6 +361,45 @@ export default function PropertyScreen({ navigation }) {
 
     if (!parts.length) return '';
     return parts.join(' · ');
+  };
+
+  const handleAddPhoto = async () => {
+    try {
+      const current = activeProperty.photos || [];
+      if (current.length >= 5) {
+        Alert.alert('Photos', 'You can upload up to 5 images.');
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow access to your photos to upload property images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || !result.assets.length) return;
+
+      const asset = result.assets[0];
+      const dataUrl = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      updateActiveProperty({ photos: [...current, dataUrl] });
+    } catch (e) {
+      Alert.alert('Photos', 'Unable to pick image. Please try again.');
+    }
+  };
+
+  const handleRemovePhoto = (index) => {
+    const current = activeProperty.photos || [];
+    const next = current.filter((_, i) => i !== index);
+    updateActiveProperty({ photos: next });
   };
 
   const fetchPropertyList = async () => {
@@ -539,7 +583,13 @@ export default function PropertyScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setActiveTab('add')}
+          onPress={() => {
+            setActiveTab('add');
+            setProperties([createEmptyProperty()]);
+            setActiveIndex(0);
+            setEditingPropertyId(null);
+            setCurrentStep(1);
+          }}
           style={[styles.tab, activeTab === 'add' && styles.tabActive]}
         >
           <Text
@@ -554,27 +604,7 @@ export default function PropertyScreen({ navigation }) {
         <>
           {/* Top step progress */}
           <View style={styles.stepHeader}>
-            <View style={styles.stepCirclesRow}>
-              {[1, 2, 3, 4].map((step) => {
-                const isCompleted = step < currentStep;
-                const isActive = step === currentStep;
-                const circleStyle = [
-                  styles.stepCircle,
-                  (isCompleted || isActive) && styles.stepCircleActive,
-                ];
-                const labelStyle = [
-                  styles.stepCircleLabel,
-                  (isCompleted || isActive) && styles.stepCircleLabelActive,
-                ];
-                return (
-                  <View key={step} style={styles.stepCircleWrapper}>
-                    <View style={circleStyle}>
-                      <Text style={labelStyle}>{step}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
+            <Text style={styles.stepLabel}>{`Step ${currentStep} of 4`}</Text>
             <View style={styles.stepBarBackground}>
               <View
                 style={[
@@ -594,6 +624,47 @@ export default function PropertyScreen({ navigation }) {
           {currentStep === 1 && (
             <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>Property Details</Text>
+
+          <View style={styles.photoSection}>
+            <Text style={styles.subSectionTitle}>Upload Property Photos</Text>
+            <Text style={styles.photoHint}>Upload up to 5 images of your property</Text>
+
+            <View style={styles.photoUploadBox}>
+              <Text style={styles.photoUploadTitle}>Add Photos</Text>
+              <Text style={styles.photoUploadSubtitle}>
+                Upload up to 5 images of your property
+              </Text>
+              <TouchableOpacity
+                style={styles.photoUploadButton}
+                onPress={handleAddPhoto}
+              >
+                <Text style={styles.photoUploadButtonLabel}>Upload</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.photoGridRow}>
+              {(activeProperty.photos || []).map((uri, index) => (
+                <View key={uri} style={styles.photoThumbWrapper}>
+                  <Image source={{ uri }} style={styles.photoThumb} />
+                  <TouchableOpacity
+                    style={styles.photoRemoveButton}
+                    onPress={() => handleRemovePhoto(index)}
+                  >
+                    <Text style={styles.photoRemoveLabel}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {(activeProperty.photos || []).length < 5 && (
+                <TouchableOpacity
+                  style={styles.photoAddTile}
+                  onPress={handleAddPhoto}
+                >
+                  <Ionicons name="add" size={24} color={theme.colors.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
 
           <Text style={styles.fieldLabel}>Mode</Text>
           <View style={styles.chipRow}>
@@ -671,26 +742,22 @@ export default function PropertyScreen({ navigation }) {
             ))}
           </View>
 
-          {activeProperty.mode === 'full' &&
-          (activeProperty.listingType === 'rent' || activeProperty.listingType === 'pg') ? (
-            <View style={styles.fieldGroupRow}>
-              <View style={[styles.fieldGroup, styles.flex1]}>
-                <Text style={styles.fieldLabel}>For Rent Room</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="One room or all rooms"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={activeProperty.rentRoomScope}
-                  onChangeText={(text) =>
-                    updateActiveProperty({ rentRoomScope: text })
-                  }
-                />
-              </View>
-            </View>
-          ) : null}
-
           {activeProperty.mode === 'full' && (
             <>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Number of Rooms</Text>
+                <View style={styles.chipRow}>
+                  {['1', '2', '3', '4', '5+'].map((count) => (
+                    <Chip
+                      key={count}
+                      label={count}
+                      selected={activeProperty.totalRooms === count}
+                      onPress={() => updateActiveProperty({ totalRooms: count })}
+                    />
+                  ))}
+                </View>
+              </View>
+
               <Text style={styles.fieldLabel}>Floor</Text>
               <View style={styles.chipRow}>
                 {FLOOR_OPTIONS.map((floor) => (
@@ -1159,26 +1226,69 @@ export default function PropertyScreen({ navigation }) {
         )}
       </ScrollView>
       <View style={styles.stepBottomBar}>
-        <TouchableOpacity
-          style={styles.stepPrimaryButton}
-          onPress={
-            currentStep === 4
-              ? handleSaveProperty
-              : () => setCurrentStep((prev) => Math.min(4, prev + 1))
-          }
-          disabled={saving}
-        >
-          <Text style={styles.stepPrimaryLabel}>
-            {currentStep === 4
-              ? saving
-                ? 'Saving...'
-                : 'Save Property'
-              : 'Next'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.stepBottomRow}>
+          {currentStep > 1 ? (
+            <TouchableOpacity
+              style={styles.stepSecondaryButton}
+              onPress={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
+              disabled={saving}
+            >
+              <Text style={styles.stepSecondaryLabel}>Back</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.stepSecondarySpacer} />
+          )}
+
+          <TouchableOpacity
+            style={styles.stepPrimaryButton}
+            onPress={
+              currentStep === 4
+                ? handleSaveProperty
+                : () => setCurrentStep((prev) => Math.min(4, prev + 1))
+            }
+            disabled={saving}
+          >
+            <Text style={styles.stepPrimaryLabel}>
+              {currentStep === 4
+                ? saving
+                  ? 'Saving...'
+                  : 'Save Property'
+                : currentStep === 1
+                  ? 'Next: Add Amenities'
+                  : 'Next'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
       </>
       ) : (
+        <>
+        <View style={styles.filterTabsRow}>
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'available', label: 'Vacant' },
+            { id: 'occupied', label: 'Occupied' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              onPress={() => setStatusFilter(tab.id)}
+              style={[
+                styles.filterTab,
+                statusFilter === tab.id && styles.filterTabActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterTabLabel,
+                  statusFilter === tab.id && styles.filterTabLabelActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -1191,23 +1301,13 @@ export default function PropertyScreen({ navigation }) {
               No properties found. Add a new property to get started.
             </Text>
           ) : (
-            propertyList.map((item, index) => {
-              const detailRows = [
-                { label: 'Rent Amount', value: item.rentAmount },
-                { label: 'Advance Rent', value: item.advanceAmount },
-                { label: 'Water Charges', value: item.waterCharges },
-                { label: 'Electricity / Unit', value: item.electricityPerUnit },
-                { label: 'Cleaning Charges', value: item.cleaningCharges },
-                { label: 'Food Charges', value: item.foodCharges },
-                { label: 'Yearly Maintenance', value: item.yearlyMaintenance },
-                { label: '% Increase after 1 year', value: item.yearlyIncreasePercent },
-                { label: 'Advance Booking Charges', value: item.bookingAdvance },
-                { label: 'Booking Validity (days)', value: item.bookingValidityDays },
-                { label: 'For Rent Room', value: item.rentRoomScope },
-                { label: 'Floor', value: item.floor || item.customFloor },
-                { label: 'Notice Period (days)', value: item.noticePeriodDays },
-              ].filter(row => row.value);
-
+            propertyList
+              .filter((item, index) => {
+                const derivedStatus = item.status || (index % 2 === 1 ? 'occupied' : 'available');
+                if (statusFilter === 'all') return true;
+                return derivedStatus === statusFilter;
+              })
+              .map((item, index) => {
               const amenitiesText =
                 Array.isArray(item.amenities) && item.amenities.length
                   ? item.amenities.join(', ')
@@ -1218,6 +1318,26 @@ export default function PropertyScreen({ navigation }) {
               const isOpen = derivedStatus === 'available';
               const isOccupied = !isOpen;
 
+              const coverPhoto =
+                Array.isArray(item.photos) && item.photos.length
+                  ? item.photos[0]
+                  : null;
+
+              const typeLabel =
+                item.category === 'house'
+                  ? 'Independent'
+                : item.category === 'flat'
+                    ? 'Flat'
+                    : item.category === 'pg'
+                      ? 'PG / Hostel'
+                      : 'Property';
+
+              const rentLabel = item.rentAmount
+                ? `₹${item.rentAmount}/month`
+                : 'Rent not set';
+
+              const statusTextLine = isOpen ? 'Open for rent' : 'Booked';
+
               return (
                 <View
                   key={item._id}
@@ -1226,48 +1346,71 @@ export default function PropertyScreen({ navigation }) {
                     !isOpen && styles.propertyCardClosed,
                   ]}
                 >
-                  <View style={styles.propertyHeaderRow}>
-                    <View style={styles.propertyHeaderText}>
-                      <Text style={styles.propertyName}>
-                        {item.propertyName || 'Untitled Property'}
+                  {coverPhoto ? (
+                    <Image source={{ uri: coverPhoto }} style={styles.propertyCoverImage} />
+                  ) : null}
+
+                  <View style={styles.propertyCardBody}>
+                    <Text style={styles.propertyStatusText}>{statusTextLine}</Text>
+
+                    <Text style={styles.propertyName}>
+                      {item.propertyName || 'Untitled Property'}
+                    </Text>
+
+                    <Text style={styles.propertySubtitle}>
+                      {item.bhk || '1BHK'} {typeLabel} • {rentLabel}
+                    </Text>
+
+                    {amenitiesText ? (
+                      <Text style={styles.propertyAmenitiesText} numberOfLines={1}>
+                        {amenitiesText}
                       </Text>
-                      <Text style={styles.propertySubtitle}>
-                        {item.category} • {item.listingType} • {item.bhk} • {item.furnishing}
+                    ) : null}
+
+                    {tenantSummary ? (
+                      <Text style={styles.propertyTenantText} numberOfLines={1}>
+                        {tenantSummary}
                       </Text>
-                      {isOccupied && (
-                        <Text style={styles.renterLabel}>
-                          Rented to: Demo Tenant
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.cardActionsColumn}>
+                    ) : null}
+
+                    <View style={styles.propertyFooterRow}>
                       <TouchableOpacity
-                        onPress={() => togglePropertyStatus(item, derivedStatus)}
-                        style={[
-                          styles.statusPill,
-                          isOpen
-                            ? styles.statusAvailable
-                            : styles.statusOccupied,
-                        ]}
+                        style={styles.viewDetailsButton}
+                        onPress={() => startEditProperty(item)}
+                        disabled={isOccupied}
                       >
-                        <Text style={styles.statusText}>
-                          {isOpen ? 'Closed' : 'Open'}
-                        </Text>
+                        <Text style={styles.viewDetailsLabel}>View Details</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() =>
-                          setOpenMenuForId(prev =>
-                            prev === item._id ? null : item._id,
-                          )
-                        }
-                        style={styles.moreButton}
-                      >
-                        <Ionicons
-                          name="ellipsis-vertical"
-                          size={18}
-                          color={theme.colors.textSecondary}
-                        />
-                      </TouchableOpacity>
+
+                      <View style={styles.cardActionsColumn}>
+                        <TouchableOpacity
+                          onPress={() => togglePropertyStatus(item, derivedStatus)}
+                          style={[
+                            styles.statusPill,
+                            isOpen
+                              ? styles.statusAvailable
+                              : styles.statusOccupied,
+                          ]}
+                        >
+                          <Text style={styles.statusText}>
+                            {isOpen ? 'Open' : 'Booked'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() =>
+                            setOpenMenuForId(prev =>
+                              prev === item._id ? null : item._id,
+                            )
+                          }
+                          style={styles.moreButton}
+                        >
+                          <Ionicons
+                            name="ellipsis-vertical"
+                            size={18}
+                            color={theme.colors.textSecondary}
+                          />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
 
@@ -1312,36 +1455,12 @@ export default function PropertyScreen({ navigation }) {
                       </TouchableOpacity>
                     </View>
                   )}
-
-                  {detailRows.length > 0 && (
-                    <View style={styles.propertyDetailsSection}>
-                      {detailRows.map((row) => (
-                        <View key={row.label} style={styles.propertyMetaRow}>
-                          <Text style={styles.metaLabel}>{row.label}</Text>
-                          <Text style={styles.metaValue}>{row.value}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  {amenitiesText ? (
-                    <View style={styles.propertyDetailsSection}>
-                      <Text style={styles.metaSectionLabel}>Amenities</Text>
-                      <Text style={styles.metaValue}>{amenitiesText}</Text>
-                    </View>
-                  ) : null}
-
-                  {tenantSummary ? (
-                    <View style={styles.propertyDetailsSection}>
-                      <Text style={styles.metaSectionLabel}>Tenant Rules & Preferences</Text>
-                      <Text style={styles.metaValue}>{tenantSummary}</Text>
-                    </View>
-                  ) : null}
                 </View>
               );
             })
           )}
         </ScrollView>
+        </>
       )}
 
       <Modal
@@ -1393,42 +1512,20 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
   },
-  stepCirclesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  stepCircleWrapper: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#e5f0ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepCircleActive: {
-    backgroundColor: theme.colors.primary,
-  },
-  stepCircleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  stepCircleLabelActive: {
-    color: '#ffffff',
+  stepLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 4,
   },
   stepBarBackground: {
-    height: 4,
+    height: 3,
     borderRadius: 999,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#E5E7EB',
     overflow: 'hidden',
   },
   stepBarFill: {
-    height: 4,
+    height: 3,
     borderRadius: 999,
     backgroundColor: theme.colors.primary,
   },
@@ -1474,14 +1571,106 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   sectionCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginBottom: theme.spacing.sm,
+    marginHorizontal: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
+  photoSection: {
+    marginBottom: theme.spacing.md,
+  },
+  photoHint: {
+    marginTop: 2,
+    marginBottom: theme.spacing.sm,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  photoUploadBox: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
+    borderRadius: 16,
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md + 4,
-    marginHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    marginBottom: theme.spacing.sm,
+  },
+  photoUploadTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  photoUploadSubtitle: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.sm,
+    textAlign: 'center',
+  },
+  photoUploadButton: {
+    marginTop: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  photoUploadButtonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  photoGridRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  photoThumbWrapper: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.colors.border,
+    marginRight: theme.spacing.sm,
+    backgroundColor: '#F3F4F6',
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  photoAddTile: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
   },
   sectionTitle: {
     fontSize: 16,
@@ -1594,7 +1783,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: '#ffffff',
@@ -1640,14 +1829,23 @@ const styles = StyleSheet.create({
   },
   propertyCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: theme.spacing.md,
+    borderRadius: 16,
     marginBottom: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    overflow: 'hidden',
+    // subtle shadow like card in reference
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   propertyCardClosed: {
     opacity: 0.5,
+  },
+  propertyCoverImage: {
+    width: '100%',
+    height: 160,
+    resizeMode: 'cover',
   },
   propertyHeaderRow: {
     flexDirection: 'row',
@@ -1658,6 +1856,10 @@ const styles = StyleSheet.create({
   propertyHeaderText: {
     flex: 1,
     marginRight: theme.spacing.sm,
+  },
+  propertyCardBody: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
   },
   propertyName: {
     fontSize: 18,
@@ -1674,6 +1876,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.primary,
     fontWeight: '600',
+  },
+  propertyStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#10B981',
+    marginBottom: 4,
+  },
+  propertyAmenitiesText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  propertyTenantText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  propertyFooterRow: {
+    marginTop: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  viewDetailsButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  viewDetailsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   propertyDetailsSection: {
     marginTop: 8,
@@ -1789,8 +2024,31 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
     backgroundColor: '#ffffff',
   },
+  stepBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  stepSecondaryButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#F3F4F6',
+  },
+  stepSecondaryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  stepSecondarySpacer: {
+    flex: 1,
+  },
   stepPrimaryButton: {
-    width: '100%',
+    flex: 2,
     backgroundColor: theme.colors.primary,
     borderRadius: 999,
     paddingVertical: 12,
@@ -1800,6 +2058,33 @@ const styles = StyleSheet.create({
   stepPrimaryLabel: {
     fontSize: 15,
     fontWeight: '600',
+    color: '#ffffff',
+  },
+  filterTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  filterTab: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+    marginRight: theme.spacing.sm,
+  },
+  filterTabActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  filterTabLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  filterTabLabelActive: {
     color: '#ffffff',
   },
   modalOverlay: {
