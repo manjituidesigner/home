@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 
+const API_BASE_URL = 'https://home-backend-zc1d.onrender.com';
+
 const PROPERTY_CATEGORIES = [
   { id: 'flat', label: 'Flat / Apartment', icon: 'home-outline' },
   { id: 'house', label: 'Independent House', icon: 'business-outline' },
@@ -96,7 +98,7 @@ function createEmptyRoom() {
     if (!item?._id) return;
     const nextStatus = item.status === 'available' ? 'occupied' : 'available';
     try {
-      const response = await fetch(`http://localhost:5001/api/properties/${item._id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/properties/${item._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -351,7 +353,7 @@ export default function PropertyScreen({ navigation }) {
   const fetchPropertyList = async () => {
     try {
       setLoadingList(true);
-      const response = await fetch('http://localhost:5001/api/properties');
+      const response = await fetch(`${API_BASE_URL}/api/properties`);
       if (!response.ok) {
         return;
       }
@@ -380,8 +382,8 @@ export default function PropertyScreen({ navigation }) {
       const isEditing = !!activeProperty._id || !!editingPropertyId;
       const targetId = activeProperty._id || editingPropertyId;
       const url = isEditing
-        ? `http://localhost:5001/api/properties/${targetId}`
-        : 'http://localhost:5001/api/properties';
+        ? `${API_BASE_URL}/api/properties/${targetId}`
+        : `${API_BASE_URL}/api/properties`;
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
