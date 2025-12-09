@@ -100,10 +100,11 @@ function createEmptyRoom() {
 function createEmptyProperty() {
   return {
     propertyName: '',
-    category: 'flat',
-    listingType: 'rent',
-    bhk: '1BHK',
-    furnishing: 'semi',
+    // start with no pre-selected chips; user will choose
+    category: '',
+    listingType: '',
+    bhk: '',
+    furnishing: '',
     rentRoomScope: '', // one room or all rooms
     floor: '',
     customFloor: '',
@@ -119,7 +120,7 @@ function createEmptyProperty() {
     bookingAdvance: '',
     bookingValidityDays: '',
     amenities: [],
-    mode: 'full', // full | room
+    mode: '', // full | room
     rooms: [createEmptyRoom()],
     // Tenant rules & preferences
     drinksPolicy: 'not_allowed',
@@ -204,6 +205,7 @@ export default function PropertyScreen({ navigation }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('add'); // 'add' | 'list'
+  const [currentStep, setCurrentStep] = useState(1); // 1..4 for add flow
   const [propertyList, setPropertyList] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState(null);
@@ -549,14 +551,49 @@ export default function PropertyScreen({ navigation }) {
       </View>
 
       {activeTab === 'add' ? (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-        {/* Section 1: Basic details */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Property Details</Text>
+        <>
+          {/* Top step progress */}
+          <View style={styles.stepHeader}>
+            <View style={styles.stepCirclesRow}>
+              {[1, 2, 3, 4].map((step) => {
+                const isCompleted = step < currentStep;
+                const isActive = step === currentStep;
+                const circleStyle = [
+                  styles.stepCircle,
+                  (isCompleted || isActive) && styles.stepCircleActive,
+                ];
+                const labelStyle = [
+                  styles.stepCircleLabel,
+                  (isCompleted || isActive) && styles.stepCircleLabelActive,
+                ];
+                return (
+                  <View key={step} style={styles.stepCircleWrapper}>
+                    <View style={circleStyle}>
+                      <Text style={labelStyle}>{step}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={styles.stepBarBackground}>
+              <View
+                style={[
+                  styles.stepBarFill,
+                  { width: `${(currentStep / 4) * 100}%` },
+                ]}
+              />
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+          {/* Step 1: Basic details */}
+          {currentStep === 1 && (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Property Details</Text>
 
           <Text style={styles.fieldLabel}>Mode</Text>
           <View style={styles.chipRow}>
@@ -780,8 +817,10 @@ export default function PropertyScreen({ navigation }) {
             </View>
           )}
         </View>
+          )}
 
-        {/* Section 2: Financial details */}
+        {/* Step 2: Financial details */}
+        {currentStep === 2 && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Rent & Charges</Text>
 
@@ -930,8 +969,10 @@ export default function PropertyScreen({ navigation }) {
             </View>
           </View>
         </View>
+        )}
 
-        {/* Section 3: Amenities */}
+        {/* Step 3: Amenities */}
+        {currentStep === 3 && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Amenities Provided</Text>
           <View style={styles.chipRowWrap}>
@@ -945,8 +986,10 @@ export default function PropertyScreen({ navigation }) {
             ))}
           </View>
         </View>
+        )}
 
-        {/* Section 4: Tenant rules & preferences */}
+        {/* Step 4: Tenant rules & preferences */}
+        {currentStep === 4 && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Tenant Rules & Preferences</Text>
           <Text style={styles.summaryText}>{buildTenantSummary()}</Text>
@@ -1112,14 +1155,29 @@ export default function PropertyScreen({ navigation }) {
               />
             ))}
           </View>
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSaveProperty}
-          >
-            <Text style={styles.saveButtonLabel}>Save Property</Text>
-          </TouchableOpacity>
         </View>
+        )}
       </ScrollView>
+      <View style={styles.stepBottomBar}>
+        <TouchableOpacity
+          style={styles.stepPrimaryButton}
+          onPress={
+            currentStep === 4
+              ? handleSaveProperty
+              : () => setCurrentStep((prev) => Math.min(4, prev + 1))
+          }
+          disabled={saving}
+        >
+          <Text style={styles.stepPrimaryLabel}>
+            {currentStep === 4
+              ? saving
+                ? 'Saving...'
+                : 'Save Property'
+              : 'Next'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      </>
       ) : (
         <ScrollView
           style={styles.scroll}
@@ -1328,6 +1386,51 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  stepHeader: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+  },
+  stepCirclesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  stepCircleWrapper: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  stepCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e5f0ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepCircleActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  stepCircleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  stepCircleLabelActive: {
+    color: '#ffffff',
+  },
+  stepBarBackground: {
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  stepBarFill: {
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
   },
   tabsRow: {
     flexDirection: 'row',
@@ -1373,8 +1476,10 @@ const styles = StyleSheet.create({
   sectionCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md + 4,
+    marginHorizontal: 4,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
@@ -1676,6 +1781,26 @@ const styles = StyleSheet.create({
   cardMenuTextDelete: {
     color: '#dc2626',
     fontWeight: '600',
+  },
+  stepBottomBar: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+  },
+  stepPrimaryButton: {
+    width: '100%',
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepPrimaryLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
   },
   modalOverlay: {
     flex: 1,
