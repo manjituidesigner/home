@@ -96,7 +96,7 @@ function createEmptyRoom() {
     if (!item?._id) return;
     const nextStatus = item.status === 'available' ? 'occupied' : 'available';
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/properties/${item._id}`, {
+      const response = await fetch(`http://localhost:5001/api/properties/${item._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
