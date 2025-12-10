@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,17 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Alert,
+  Modal,
+  Linking,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
+
+const API_BASE_URL = 'https://home-backend-zc1d.onrender.com';
 
 const PROPERTY_CATEGORIES = [
   { id: 'flat', label: 'Flat / Apartment', icon: 'home-outline' },
@@ -95,6 +102,7 @@ function createEmptyRoom() {
 function createEmptyProperty() {
   return {
     propertyName: '',
+    // defaults aligned with backend Property schema enums
     category: 'flat',
     listingType: 'rent',
     bhk: '1BHK',
@@ -114,9 +122,10 @@ function createEmptyProperty() {
     bookingAdvance: '',
     bookingValidityDays: '',
     amenities: [],
+    photos: [],
     mode: 'full', // full | room
     rooms: [createEmptyRoom()],
-    // Tenant rules & preferences
+    // Tenant rules & preferences (backend defaults)
     drinksPolicy: 'not_allowed',
     smokingPolicy: 'not_allowed',
     lateNightPolicy: 'not_allowed',
@@ -127,8 +136,10 @@ function createEmptyProperty() {
     parkingBikeCount: '',
     parkingCarCount: '',
     preferredTenantTypes: [],
+    totalRooms: '',
     lateNightMode: 'anytime', // anytime | till_time
     lateNightLastTime: '',
+    status: 'available',
   };
 }
 
@@ -196,6 +207,16 @@ function Chip({ label, selected, onPress }) {
 export default function PropertyScreen({ navigation }) {
   const [properties, setProperties] = useState([createEmptyProperty()]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('add'); // 'add' | 'list'
+  const [currentStep, setCurrentStep] = useState(1); // 1..4 for add flow
+  const [propertyList, setPropertyList] = useState([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [editingPropertyId, setEditingPropertyId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [openMenuForId, setOpenMenuForId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all'); // all | available | occupied
 
   const activeProperty = properties[activeIndex];
 
@@ -205,6 +226,30 @@ export default function PropertyScreen({ navigation }) {
       next[activeIndex] = { ...next[activeIndex], ...patch };
       return next;
     });
+  };
+
+  const togglePropertyStatus = async (item, currentStatus) => {
+    if (!item?._id) return;
+    const effectiveStatus = currentStatus || item.status || 'available';
+    const nextStatus = effectiveStatus === 'available' ? 'occupied' : 'available';
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/properties/${item._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!response.ok) {
+        return;
+      }
+      const updated = await response.json();
+      setPropertyList((prev) =>
+        prev.map((p) => (p._id === updated._id ? updated : p)),
+      );
+    } catch (e) {
+      // ignore update errors for now
+    }
   };
 
   const toggleAmenity = (name) => {
@@ -283,6 +328,155 @@ export default function PropertyScreen({ navigation }) {
     return parts.join(' · ');
   };
 
+  const buildTenantSummaryFor = (property) => {
+    const parts = [];
+
+    if (property.preferredTenantTypes?.length) {
+      parts.push(`Preferred: ${property.preferredTenantTypes.join(', ')}`);
+    }
+
+    const behaviourBits = [];
+    if (property.drinksPolicy === 'not_allowed') behaviourBits.push('no drinks');
+    if (property.smokingPolicy === 'not_allowed') behaviourBits.push('no smoking');
+
+    if (property.lateNightPolicy === 'not_allowed') {
+      behaviourBits.push('no late night coming');
+    } else if (property.lateNightPolicy === 'allowed') {
+      if (property.lateNightMode === 'till_time' && property.lateNightLastTime) {
+        behaviourBits.push(`late night allowed till ${property.lateNightLastTime}`);
+      } else {
+        behaviourBits.push('late night allowed');
+      }
+    } else if (property.lateNightPolicy === 'conditional') {
+      behaviourBits.push('late night with conditions');
+    }
+
+    if (behaviourBits.length) {
+      parts.push(behaviourBits.join(', '));
+    }
+
+    if (property.parkingType && property.parkingType !== 'none') {
+      parts.push('parking available');
+    }
+
+    if (!parts.length) return '';
+    return parts.join(' · ');
+  };
+
+  const handleAddPhoto = async () => {
+    try {
+      const current = activeProperty.photos || [];
+      if (current.length >= 5) {
+        Alert.alert('Photos', 'You can upload up to 5 images.');
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow access to your photos to upload property images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: false,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || !result.assets.length) return;
+
+      const asset = result.assets[0];
+      const dataUrl = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      updateActiveProperty({ photos: [...current, dataUrl] });
+    } catch (e) {
+      Alert.alert('Photos', 'Unable to pick image. Please try again.');
+    }
+  };
+
+  const handleRemovePhoto = (index) => {
+    const current = activeProperty.photos || [];
+    const next = current.filter((_, i) => i !== index);
+    updateActiveProperty({ photos: next });
+  };
+
+  const fetchPropertyList = async () => {
+    try {
+      setLoadingList(true);
+      const response = await fetch(`${API_BASE_URL}/api/properties`);
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      setPropertyList(Array.isArray(data) ? data : []);
+    } catch (e) {
+      // ignore list load errors for now
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPropertyList();
+  }, []);
+
+  const handleSaveProperty = async () => {
+    console.log('handleSaveProperty called with', activeProperty);
+    if (!activeProperty.propertyName) {
+      Alert.alert('Validation', 'Please enter a property name.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const isEditing = !!activeProperty._id || !!editingPropertyId;
+      const targetId = activeProperty._id || editingPropertyId;
+      const url = isEditing
+        ? `${API_BASE_URL}/api/properties/${targetId}`
+        : `${API_BASE_URL}/api/properties`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(activeProperty),
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to save property.';
+        try {
+          const errorBody = await response.json();
+          if (errorBody && errorBody.message) {
+            message = errorBody.message;
+          }
+        } catch (e) {}
+        Alert.alert('Error', message);
+        return;
+      }
+
+      const saved = await response.json();
+      Alert.alert('Success', isEditing ? 'Property updated successfully.' : 'Property saved successfully.');
+      setEditingPropertyId(null);
+      if (saved && saved._id) {
+        // ensure local form has latest copy including id
+        setProperties([{
+          ...createEmptyProperty(),
+          ...saved,
+        }]);
+      }
+      fetchPropertyList();
+      setActiveTab('list');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to save property. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAddMoreProperty = () => {
     setProperties((prev) => [...prev, createEmptyProperty()]);
     setActiveIndex(properties.length); // new last index
@@ -291,6 +485,82 @@ export default function PropertyScreen({ navigation }) {
   const showAddMore = properties.length >= 1;
 
   const rooms = activeProperty.rooms || [];
+
+  const startEditProperty = (item) => {
+    if (!item || !item._id) return;
+    const merged = {
+      ...createEmptyProperty(),
+      ...item,
+      rooms: item.rooms && item.rooms.length ? item.rooms : [createEmptyRoom()],
+    };
+    setProperties([merged]);
+    setActiveIndex(0);
+    setEditingPropertyId(item._id);
+    setActiveTab('add');
+  };
+
+  const confirmDeleteProperty = (item) => {
+    if (!item || !item._id) return;
+    setDeleteTarget(item);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || !deleteTarget._id) {
+      setShowDeleteModal(false);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/properties/${deleteTarget._id}`,
+        { method: 'DELETE' },
+      );
+      if (!response.ok) {
+        setShowDeleteModal(false);
+        return;
+      }
+      setPropertyList(prev => prev.filter(p => p._id !== deleteTarget._id));
+      fetchPropertyList();
+    } catch (e) {
+      // ignore delete errors for now
+    } finally {
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+    }
+  };
+
+  const handleShareProperty = async (item) => {
+    if (!item) return;
+    try {
+      const lines = [];
+      lines.push(`Property: ${item.propertyName || 'Untitled Property'}`);
+      lines.push(`Category: ${item.category}`);
+      lines.push(`Listing Type: ${item.listingType}`);
+      lines.push(`Configuration: ${item.bhk}`);
+      lines.push(`Furnishing: ${item.furnishing}`);
+      if (item.rentAmount) lines.push(`Rent: ${item.rentAmount}`);
+      if (item.advanceAmount) lines.push(`Advance: ${item.advanceAmount}`);
+      if (item.waterCharges) lines.push(`Water Charges: ${item.waterCharges}`);
+      if (item.electricityPerUnit) lines.push(`Electricity / Unit: ${item.electricityPerUnit}`);
+      if (item.cleaningCharges) lines.push(`Cleaning Charges: ${item.cleaningCharges}`);
+      if (item.foodCharges) lines.push(`Food Charges: ${item.foodCharges}`);
+      if (item.floor || item.customFloor) lines.push(`Floor: ${item.floor || item.customFloor}`);
+      if (Array.isArray(item.amenities) && item.amenities.length) {
+        lines.push(`Amenities: ${item.amenities.join(', ')}`);
+      }
+
+      const message = lines.join('\n');
+      const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Share', 'WhatsApp is not installed on this device.');
+      }
+    } catch (e) {
+      Alert.alert('Share', 'Unable to open WhatsApp.');
+    }
+  };
 
   return (
     <ScreenLayout
@@ -302,44 +572,99 @@ export default function PropertyScreen({ navigation }) {
       }}
     >
       <View style={styles.tabsRow}>
-        {properties.map((_, index) => (
-          <TouchableOpacity
-            key={index}
-            onPress={() => setActiveIndex(index)}
-            style={[
-              styles.tab,
-              activeIndex === index && styles.tabActive,
-            ]}
+        <TouchableOpacity
+          onPress={() => setActiveTab('list')}
+          style={[styles.tab, activeTab === 'list' && styles.tabActive]}
+        >
+          <Text
+            style={[styles.tabLabel, activeTab === 'list' && styles.tabLabelActive]}
           >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeIndex === index && styles.tabLabelActive,
-              ]}
-            >
-              {`Property ${index + 1}`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {showAddMore && (
-          <TouchableOpacity
-            onPress={handleAddMoreProperty}
-            style={styles.addMoreButton}
+            My Property
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('add');
+            setProperties([createEmptyProperty()]);
+            setActiveIndex(0);
+            setEditingPropertyId(null);
+            setCurrentStep(1);
+          }}
+          style={[styles.tab, activeTab === 'add' && styles.tabActive]}
+        >
+          <Text
+            style={[styles.tabLabel, activeTab === 'add' && styles.tabLabelActive]}
           >
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.addMoreLabel}>Add More</Text>
-          </TouchableOpacity>
-        )}
+            Add New
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Section 1: Basic details */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Property Details</Text>
+      {activeTab === 'add' ? (
+        <>
+          {/* Top step progress */}
+          <View style={styles.stepHeader}>
+            <Text style={styles.stepLabel}>{`Step ${currentStep} of 4`}</Text>
+            <View style={styles.stepBarBackground}>
+              <View
+                style={[
+                  styles.stepBarFill,
+                  { width: `${(currentStep / 4) * 100}%` },
+                ]}
+              />
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+          {/* Step 1: Basic details */}
+          {currentStep === 1 && (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Property Details</Text>
+
+          <View style={styles.photoSection}>
+            <Text style={styles.subSectionTitle}>Upload Property Photos</Text>
+            <Text style={styles.photoHint}>Upload up to 5 images of your property</Text>
+
+            <View style={styles.photoUploadBox}>
+              <Text style={styles.photoUploadTitle}>Add Photos</Text>
+              <Text style={styles.photoUploadSubtitle}>
+                Upload up to 5 images of your property
+              </Text>
+              <TouchableOpacity
+                style={styles.photoUploadButton}
+                onPress={handleAddPhoto}
+              >
+                <Text style={styles.photoUploadButtonLabel}>Upload</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.photoGridRow}>
+              {(activeProperty.photos || []).map((uri, index) => (
+                <View key={uri} style={styles.photoThumbWrapper}>
+                  <Image source={{ uri }} style={styles.photoThumb} />
+                  <TouchableOpacity
+                    style={styles.photoRemoveButton}
+                    onPress={() => handleRemovePhoto(index)}
+                  >
+                    <Text style={styles.photoRemoveLabel}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {(activeProperty.photos || []).length < 5 && (
+                <TouchableOpacity
+                  style={styles.photoAddTile}
+                  onPress={handleAddPhoto}
+                >
+                  <Ionicons name="add" size={24} color={theme.colors.primary} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
 
           <Text style={styles.fieldLabel}>Mode</Text>
           <View style={styles.chipRow}>
@@ -417,26 +742,22 @@ export default function PropertyScreen({ navigation }) {
             ))}
           </View>
 
-          {activeProperty.mode === 'full' &&
-          (activeProperty.listingType === 'rent' || activeProperty.listingType === 'pg') ? (
-            <View style={styles.fieldGroupRow}>
-              <View style={[styles.fieldGroup, styles.flex1]}>
-                <Text style={styles.fieldLabel}>For Rent Room</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="One room or all rooms"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={activeProperty.rentRoomScope}
-                  onChangeText={(text) =>
-                    updateActiveProperty({ rentRoomScope: text })
-                  }
-                />
-              </View>
-            </View>
-          ) : null}
-
           {activeProperty.mode === 'full' && (
             <>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Number of Rooms</Text>
+                <View style={styles.chipRow}>
+                  {['1', '2', '3', '4', '5+'].map((count) => (
+                    <Chip
+                      key={count}
+                      label={count}
+                      selected={activeProperty.totalRooms === count}
+                      onPress={() => updateActiveProperty({ totalRooms: count })}
+                    />
+                  ))}
+                </View>
+              </View>
+
               <Text style={styles.fieldLabel}>Floor</Text>
               <View style={styles.chipRow}>
                 {FLOOR_OPTIONS.map((floor) => (
@@ -563,8 +884,10 @@ export default function PropertyScreen({ navigation }) {
             </View>
           )}
         </View>
+          )}
 
-        {/* Section 2: Financial details */}
+        {/* Step 2: Financial details */}
+        {currentStep === 2 && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Rent & Charges</Text>
 
@@ -713,8 +1036,10 @@ export default function PropertyScreen({ navigation }) {
             </View>
           </View>
         </View>
+        )}
 
-        {/* Section 3: Amenities */}
+        {/* Step 3: Amenities */}
+        {currentStep === 3 && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Amenities Provided</Text>
           <View style={styles.chipRowWrap}>
@@ -728,8 +1053,10 @@ export default function PropertyScreen({ navigation }) {
             ))}
           </View>
         </View>
+        )}
 
-        {/* Section 4: Tenant rules & preferences */}
+        {/* Step 4: Tenant rules & preferences */}
+        {currentStep === 4 && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Tenant Rules & Preferences</Text>
           <Text style={styles.summaryText}>{buildTenantSummary()}</Text>
@@ -896,7 +1223,278 @@ export default function PropertyScreen({ navigation }) {
             ))}
           </View>
         </View>
+        )}
       </ScrollView>
+      <View style={styles.stepBottomBar}>
+        <View style={styles.stepBottomRow}>
+          {currentStep > 1 ? (
+            <TouchableOpacity
+              style={styles.stepSecondaryButton}
+              onPress={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
+              disabled={saving}
+            >
+              <Text style={styles.stepSecondaryLabel}>Back</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.stepSecondarySpacer} />
+          )}
+
+          <TouchableOpacity
+            style={styles.stepPrimaryButton}
+            onPress={
+              currentStep === 4
+                ? handleSaveProperty
+                : () => setCurrentStep((prev) => Math.min(4, prev + 1))
+            }
+            disabled={saving}
+          >
+            <Text style={styles.stepPrimaryLabel}>
+              {currentStep === 4
+                ? saving
+                  ? 'Saving...'
+                  : 'Save Property'
+                : currentStep === 1
+                  ? 'Next: Add Amenities'
+                  : 'Next'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      </>
+      ) : (
+        <>
+        <View style={styles.filterTabsRow}>
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'available', label: 'Vacant' },
+            { id: 'occupied', label: 'Occupied' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              onPress={() => setStatusFilter(tab.id)}
+              style={[
+                styles.filterTab,
+                statusFilter === tab.id && styles.filterTabActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterTabLabel,
+                  statusFilter === tab.id && styles.filterTabLabelActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {loadingList ? (
+            <Text style={styles.emptyText}>Loading properties...</Text>
+          ) : propertyList.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No properties found. Add a new property to get started.
+            </Text>
+          ) : (
+            propertyList
+              .filter((item, index) => {
+                const derivedStatus = item.status || (index % 2 === 1 ? 'occupied' : 'available');
+                if (statusFilter === 'all') return true;
+                return derivedStatus === statusFilter;
+              })
+              .map((item, index) => {
+              const amenitiesText =
+                Array.isArray(item.amenities) && item.amenities.length
+                  ? item.amenities.join(', ')
+                  : '';
+              const tenantSummary = buildTenantSummaryFor(item);
+
+              const derivedStatus = item.status || (index % 2 === 1 ? 'occupied' : 'available');
+              const isOpen = derivedStatus === 'available';
+              const isOccupied = !isOpen;
+
+              const coverPhoto =
+                Array.isArray(item.photos) && item.photos.length
+                  ? item.photos[0]
+                  : null;
+
+              const typeLabel =
+                item.category === 'house'
+                  ? 'Independent'
+                : item.category === 'flat'
+                    ? 'Flat'
+                    : item.category === 'pg'
+                      ? 'PG / Hostel'
+                      : 'Property';
+
+              const rentLabel = item.rentAmount
+                ? `₹${item.rentAmount}/month`
+                : 'Rent not set';
+
+              const statusTextLine = isOpen ? 'Open for rent' : 'Booked';
+
+              return (
+                <View
+                  key={item._id}
+                  style={[
+                    styles.propertyCard,
+                    !isOpen && styles.propertyCardClosed,
+                  ]}
+                >
+                  {coverPhoto ? (
+                    <Image source={{ uri: coverPhoto }} style={styles.propertyCoverImage} />
+                  ) : null}
+
+                  <View style={styles.propertyCardBody}>
+                    <Text style={styles.propertyStatusText}>{statusTextLine}</Text>
+
+                    <Text style={styles.propertyName}>
+                      {item.propertyName || 'Untitled Property'}
+                    </Text>
+
+                    <Text style={styles.propertySubtitle}>
+                      {item.bhk || '1BHK'} {typeLabel} • {rentLabel}
+                    </Text>
+
+                    {amenitiesText ? (
+                      <Text style={styles.propertyAmenitiesText} numberOfLines={1}>
+                        {amenitiesText}
+                      </Text>
+                    ) : null}
+
+                    {tenantSummary ? (
+                      <Text style={styles.propertyTenantText} numberOfLines={1}>
+                        {tenantSummary}
+                      </Text>
+                    ) : null}
+
+                    <View style={styles.propertyFooterRow}>
+                      <TouchableOpacity
+                        style={styles.viewDetailsButton}
+                        onPress={() => startEditProperty(item)}
+                        disabled={isOccupied}
+                      >
+                        <Text style={styles.viewDetailsLabel}>View Details</Text>
+                      </TouchableOpacity>
+
+                      <View style={styles.cardActionsColumn}>
+                        <TouchableOpacity
+                          onPress={() => togglePropertyStatus(item, derivedStatus)}
+                          style={[
+                            styles.statusPill,
+                            isOpen
+                              ? styles.statusAvailable
+                              : styles.statusOccupied,
+                          ]}
+                        >
+                          <Text style={styles.statusText}>
+                            {isOpen ? 'Open' : 'Booked'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() =>
+                            setOpenMenuForId(prev =>
+                              prev === item._id ? null : item._id,
+                            )
+                          }
+                          style={styles.moreButton}
+                        >
+                          <Ionicons
+                            name="ellipsis-vertical"
+                            size={18}
+                            color={theme.colors.textSecondary}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  {openMenuForId === item._id && (
+                    <View style={styles.cardMenu}>
+                      <TouchableOpacity
+                        disabled={isOccupied}
+                        onPress={() => {
+                          setOpenMenuForId(null);
+                          if (!isOccupied) startEditProperty(item);
+                        }}
+                        style={styles.cardMenuItem}
+                      >
+                        <Text
+                          style={[
+                            styles.cardMenuText,
+                            isOccupied && styles.cardMenuTextDisabled,
+                          ]}
+                        >
+                          Edit
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setOpenMenuForId(null);
+                          confirmDeleteProperty(item);
+                        }}
+                        style={styles.cardMenuItem}
+                      >
+                        <Text style={[styles.cardMenuText, styles.cardMenuTextDelete]}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setOpenMenuForId(null);
+                          handleShareProperty(item);
+                        }}
+                        style={styles.cardMenuItem}
+                      >
+                        <Text style={styles.cardMenuText}>Share</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+        </>
+      )}
+
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete Property</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to delete this property?
+            </Text>
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setDeleteTarget(null);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalDeleteButton]}
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.modalDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenLayout>
   );
 }
@@ -907,6 +1505,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  stepHeader: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+  },
+  stepLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 4,
+  },
+  stepBarBackground: {
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  stepBarFill: {
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
   },
   tabsRow: {
     flexDirection: 'row',
@@ -950,12 +1571,106 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   sectionCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: theme.spacing.md,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginBottom: theme.spacing.sm,
+    marginHorizontal: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+  },
+  photoSection: {
     marginBottom: theme.spacing.md,
+  },
+  photoHint: {
+    marginTop: 2,
+    marginBottom: theme.spacing.sm,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  photoUploadBox: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
+    borderRadius: 16,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    marginBottom: theme.spacing.sm,
+  },
+  photoUploadTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  photoUploadSubtitle: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.sm,
+    textAlign: 'center',
+  },
+  photoUploadButton: {
+    marginTop: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  photoUploadButtonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  photoGridRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  photoThumbWrapper: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.colors.border,
+    marginRight: theme.spacing.sm,
+    backgroundColor: '#F3F4F6',
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  photoAddTile: {
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
   },
   sectionTitle: {
     fontSize: 16,
@@ -1068,7 +1783,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: '#ffffff',
@@ -1092,5 +1807,340 @@ const styles = StyleSheet.create({
   },
   mr8: {
     marginRight: 8,
+  },
+  saveButton: {
+    marginTop: theme.spacing.md,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  emptyText: {
+    marginTop: theme.spacing.lg,
+    textAlign: 'center',
+    color: theme.colors.textSecondary,
+    fontSize: 14,
+  },
+  propertyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginBottom: theme.spacing.md,
+    overflow: 'hidden',
+    // subtle shadow like card in reference
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  propertyCardClosed: {
+    opacity: 0.5,
+  },
+  propertyCoverImage: {
+    width: '100%',
+    height: 160,
+    resizeMode: 'cover',
+  },
+  propertyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  propertyHeaderText: {
+    flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  propertyCardBody: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+  },
+  propertyName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  propertySubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+  },
+  renterLabel: {
+    marginTop: 2,
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  propertyStatusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#10B981',
+    marginBottom: 4,
+  },
+  propertyAmenitiesText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  propertyTenantText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  propertyFooterRow: {
+    marginTop: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  viewDetailsButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  viewDetailsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  propertyDetailsSection: {
+    marginTop: 8,
+  },
+  propertyMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  metaLabel: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontWeight: '500',
+  },
+  metaValue: {
+    fontSize: 13,
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  metaSectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 2,
+  },
+  cardActionsColumn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  editCardButton: {
+    marginLeft: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+  },
+  editCardButtonDisabled: {
+    opacity: 0.4,
+  },
+  editCardButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  editCardButtonLabelDisabled: {
+    color: theme.colors.textSecondary,
+  },
+  deleteCardButton: {
+    marginLeft: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 6,
+  },
+  deleteCardButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#dc2626',
+  },
+  statusPill: {
+    marginLeft: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusAvailable: {
+    backgroundColor: theme.colors.primary,
+  },
+  statusOccupied: {
+    backgroundColor: '#111827',
+  },
+  moreButton: {
+    paddingHorizontal: theme.spacing.xs,
+    paddingVertical: 6,
+  },
+  cardMenu: {
+    position: 'absolute',
+    top: 40,
+    right: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: 4,
+    minWidth: 140,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    zIndex: 20,
+  },
+  cardMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  cardMenuText: {
+    fontSize: 14,
+    color: theme.colors.text,
+  },
+  cardMenuTextDisabled: {
+    color: theme.colors.textSecondary,
+  },
+  cardMenuTextDelete: {
+    color: '#dc2626',
+    fontWeight: '600',
+  },
+  stepBottomBar: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+  },
+  stepBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  stepSecondaryButton: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#F3F4F6',
+  },
+  stepSecondaryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  stepSecondarySpacer: {
+    flex: 1,
+  },
+  stepPrimaryButton: {
+    flex: 2,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepPrimaryLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  filterTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  filterTab: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+    marginRight: theme.spacing.sm,
+  },
+  filterTabActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  filterTabLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  filterTabLabelActive: {
+    color: '#ffffff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.md,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  modalButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginLeft: theme.spacing.sm,
+  },
+  modalCancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  modalDeleteButton: {
+    backgroundColor: '#dc2626',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  modalDeleteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

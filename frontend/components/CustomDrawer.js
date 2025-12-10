@@ -4,21 +4,20 @@ import { DrawerContentScrollView } from '@react-navigation/drawer';
 import theme from '../theme';
 
 export default function CustomDrawer(props) {
-<<<<<<< HEAD
   const { state, navigation } = props;
 
   const menuItems = [
-    { key: 'Dashboard', label: 'Dashboard', icon: '▢' },
-    { key: 'Profile', label: 'Profile', icon: '👤' },
-    { key: 'Property', label: 'Property', icon: '🏠' },
-    { key: 'Wishlist', label: 'Wishlist', icon: '❤' },
-    { key: 'Tenents', label: 'Tenents', icon: '👥' },
-    { key: 'Payments', label: 'Payments', icon: '💳' },
-    { key: 'Settings', label: 'Settings', icon: '⚙' },
-    { key: 'Documents', label: 'Documents', icon: '📄' },
-    { key: 'Ads', label: 'Ads', icon: '📢' },
-    { key: 'subscription', label: 'Subscription', icon: '★' },
-    { key: 'Logout', label: 'Logout', icon: '⎋' },
+    { key: 'Dashboard', label: 'Dashboard', icon: '\u25a2' },
+    { key: 'Profile', label: 'Profile', icon: '\ud83d\udc64' },
+    { key: 'Property', label: 'Property', icon: '\ud83c\udfe0' },
+    { key: 'Wishlist', label: 'Wishlist', icon: '\u2764' },
+    { key: 'Tenents', label: 'Tenents', icon: '\ud83d\udc65' },
+    { key: 'Payments', label: 'Payments', icon: '\ud83d\udcb3' },
+    { key: 'Settings', label: 'Settings', icon: '\u2699' },
+    { key: 'Documents', label: 'Documents', icon: '\ud83d\udcc4' },
+    { key: 'Ads', label: 'Ads', icon: '\ud83d\udce2' },
+    { key: 'subscription', label: 'Subscription', icon: '\u2605' },
+    { key: 'Logout', label: 'Logout', icon: '\u23cb' },
   ];
 
   const handleNavigate = (itemKey) => {
@@ -31,12 +30,6 @@ export default function CustomDrawer(props) {
     if (targetRoute) {
       navigation.navigate(itemKey);
     }
-=======
-  const { state, descriptors, navigation } = props;
-
-  const handleNavigate = (routeName) => {
-    navigation.navigate(routeName);
->>>>>>> main
   };
 
   const handleLogout = () => {
@@ -58,7 +51,6 @@ export default function CustomDrawer(props) {
       >
         <View style={styles.menuBlock}>
           <Text style={styles.menuTitle}>Menu</Text>
-<<<<<<< HEAD
           {menuItems.map((item) => {
             const focused = state.routes[state.index]?.name === item.key;
             const isLogout = item.key === 'Logout';
@@ -101,33 +93,16 @@ export default function CustomDrawer(props) {
                     {item.label}
                   </Text>
                 </View>
-=======
-          {state.routes.map((route, index) => {
-            const focused = index === state.index;
-            const label = descriptors[route.key].options.drawerLabel ?? route.name;
-            return (
-              <TouchableOpacity
-                key={route.key}
-                onPress={() => handleNavigate(route.name)}
-                style={[styles.menuItem, focused && styles.menuItemFocused]}
-              >
-                <Text style={[styles.menuLabel, focused && styles.menuLabelFocused]}>
-                  {label}
-                </Text>
->>>>>>> main
               </TouchableOpacity>
             );
           })}
         </View>
       </DrawerContentScrollView>
-<<<<<<< HEAD
-=======
       <View style={styles.logoutBlock}>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
           <Text style={styles.logoutLabel}>Logout</Text>
         </TouchableOpacity>
       </View>
->>>>>>> main
     </View>
   );
 }
@@ -160,7 +135,6 @@ const styles = StyleSheet.create({
   menuItemFocused: {
     backgroundColor: '#E8F5FD',
   },
-<<<<<<< HEAD
   menuItemLogout: {
     marginTop: 16,
   },
@@ -194,8 +168,6 @@ const styles = StyleSheet.create({
   iconGlyphLogout: {
     color: '#b91c1c',
   },
-=======
->>>>>>> main
   menuLabel: {
     fontSize: 15,
     color: theme.colors.text,
@@ -204,8 +176,6 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '600',
   },
-<<<<<<< HEAD
-=======
   logoutBlock: {
     paddingHorizontal: 16,
     paddingBottom: 24,
@@ -224,5 +194,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
->>>>>>> main
 });

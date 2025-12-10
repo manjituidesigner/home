@@ -7,22 +7,12 @@ export default function DashboardScreen({ navigation }) {
   return (
     <ScreenLayout
       title="Dashboard"
-<<<<<<< HEAD
+      showSearchRow
       onPressMenu={() => {
         if (navigation && navigation.openDrawer) {
           navigation.openDrawer();
         }
       }}
-=======
-      headerRight={
-        <TouchableOpacity
-          onPress={() => navigation.openDrawer()}
-          style={styles.menuButton}
-        >
-          <Text style={styles.menuLabel}>Menu</Text>
-        </TouchableOpacity>
-      }
->>>>>>> main
     >
       <View style={styles.body}>
         <Text style={styles.bodyText}>Dashboard content will go here later.</Text>
@@ -32,8 +22,6 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-<<<<<<< HEAD
-=======
   menuButton: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 6,
@@ -45,7 +33,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
->>>>>>> main
   body: {
     flex: 1,
     alignItems: 'center',

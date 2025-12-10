@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -458,77 +457,74 @@ export default function ProfileScreen({ navigation }) {
         }
       }}
     >
-      <View style={styles.header}>
-        <View style={styles.profileHeader}>
-          <TouchableOpacity
-            style={styles.avatarContainer}
-            onPress={isEditing ? pickImage : null}
-            disabled={!isEditing}
-          >
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.avatar} />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={40} color="#fff" />
-              </View>
-            )}
-            {isEditing && (
-              <View style={styles.cameraIcon}>
-                <Ionicons name="camera" size={18} color="#fff" />
-              </View>
-            )}
-          </TouchableOpacity>
+      <View style={styles.pageWrapper}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+        <View style={styles.header}>
+          <View style={styles.profileHeader}>
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={isEditing ? pickImage : null}
+              disabled={!isEditing}
+            >
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person-outline" size={40} color="#4b5563" />
+                </View>
+              )}
+              {isEditing && (
+                <View style={styles.cameraIcon}>
+                  <Ionicons name="camera-outline" size={18} color="#ffffff" />
+                </View>
+              )}
+            </TouchableOpacity>
 
-          <View style={styles.headerActions}>
-            {isEditing ? (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={isProfileComplete ? handleUpdate : handleSave}
-                disabled={!isProfileComplete}
-              >
-                <Ionicons name="save" size={16} color="#fff" />
-                <Text
-                  style={[
-                    styles.editButtonText,
-                    !isProfileComplete && { opacity: 0.7 },
-                  ]}
+            <View style={styles.headerActions}>
+              {!isEditing && (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => setIsEditing(true)}
                 >
-                  {isProfileComplete ? 'Update' : 'Save'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => setIsEditing(true)}
-              >
-                <Ionicons name="pencil" size={16} color="#fff" />
-                <Text style={styles.editButtonText}>Edit Profile</Text>
-              </TouchableOpacity>
-            )}
+                  <Ionicons name="pencil-outline" size={16} color="#ffffff" />
+                  <Text style={styles.editButtonText}>Edit Profile</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
+
+          {isEditing && (
+            <View style={styles.photoOptions}>
+              <TouchableOpacity
+                style={styles.photoOptionButton}
+                onPress={pickImage}
+              >
+                <Ionicons
+                  name="image-outline"
+                  size={18}
+                  color={theme.colors.textSecondary || '#6b7280'}
+                />
+                <Text style={styles.photoOptionText}>Gallery</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.photoOptionButton}
+                onPress={takePhoto}
+              >
+                <Ionicons
+                  name="camera-outline"
+                  size={18}
+                  color={theme.colors.textSecondary || '#6b7280'}
+                />
+                <Text style={styles.photoOptionText}>Camera</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        {isEditing && (
-          <View style={styles.photoOptions}>
-            <TouchableOpacity
-              style={styles.photoOptionButton}
-              onPress={pickImage}
-            >
-              <Ionicons name="image" size={18} color={theme.colors.primary} />
-              <Text style={styles.photoOptionText}>Gallery</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.photoOptionButton}
-              onPress={takePhoto}
-            >
-              <Ionicons name="camera" size={18} color={theme.colors.primary} />
-              <Text style={styles.photoOptionText}>Camera</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Personal Information</Text>
 
@@ -606,10 +602,12 @@ export default function ProfileScreen({ navigation }) {
 
         {renderAddressFields('current')}
         {renderAddressFields('permanent')}
+      </ScrollView>
 
-        {isEditing && (
+      {isEditing && (
+        <View style={styles.bottomBar}>
           <TouchableOpacity
-            style={styles.cancelButton}
+            style={[styles.bottomButton, styles.bottomCancelButton]}
             onPress={() => {
               setIsEditing(false);
               const loadSavedData = async () => {
@@ -642,56 +640,64 @@ export default function ProfileScreen({ navigation }) {
               loadSavedData();
             }}
           >
-            <Text style={[styles.buttonText, { color: theme.colors.primary }]}>
+            <Text
+              style={[
+                styles.buttonText,
+                { color: theme.colors.textSecondary || '#6b7280' },
+              ]}
+            >
               Cancel
             </Text>
           </TouchableOpacity>
-        )}
-      </ScrollView>
-=======
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import ScreenLayout from '../layouts/ScreenLayout';
-import theme from '../theme';
 
-export default function ProfileScreen() {
-  return (
-    <ScreenLayout title="Profile">
-      <View style={styles.container}>
-        <Text style={styles.title}>Profile</Text>
-        <Text style={styles.subtitle}>
-          Profile details form will be designed later.
-        </Text>
+          <TouchableOpacity
+            style={[styles.bottomButton, styles.bottomUpdateButton]}
+            onPress={isProfileComplete ? handleUpdate : handleSave}
+            disabled={!isProfileComplete}
+          >
+            <Ionicons name="save-outline" size={18} color="#ffffff" />
+            <Text
+              style={[
+                styles.buttonText,
+                { color: '#ffffff', marginLeft: 8 },
+                !isProfileComplete && { opacity: 0.7 },
+              ]}
+            >
+              {isProfileComplete ? 'Update' : 'Save'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       </View>
->>>>>>> main
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-<<<<<<< HEAD
+  pageWrapper: {
     flex: 1,
-    padding: 16,
+    position: 'relative',
+  },
+  container: {
+    flex: 1,
     backgroundColor: '#f9fafb',
   },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 120,
+  },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     padding: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderRadius: 16,
     marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
   },
   profileHeader: {
     flexDirection: 'row',
@@ -704,10 +710,12 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   avatar: {
     width: '100%',
@@ -718,7 +726,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 50,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -726,14 +734,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: '#111827',
     width: 32,
     height: 32,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: '#ffffff',
   },
   headerActions: {
     flexDirection: 'row',
@@ -742,10 +750,10 @@ const styles = StyleSheet.create({
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    backgroundColor: '#111827',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
   },
   editButtonText: {
     color: '#fff',
@@ -761,43 +769,39 @@ const styles = StyleSheet.create({
   photoOptionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f9fafb',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 16,
+    borderRadius: 999,
     marginHorizontal: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   photoOptionText: {
     marginLeft: 6,
-    color: theme.colors.primary,
+    color: theme.colors.textSecondary || '#6b7280',
     fontSize: 14,
     fontWeight: '500',
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.primary,
-    paddingLeft: 12,
+    paddingLeft: 4,
   },
   inputGroup: {
     flexDirection: 'row',
@@ -818,6 +822,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     fontSize: 15,
     color: '#111827',
+    outlineStyle: 'none',
   },
   row: {
     flexDirection: 'row',
@@ -855,11 +860,41 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '400',
   },
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bottomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 999,
+    marginHorizontal: 6,
+  },
+  bottomCancelButton: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  bottomUpdateButton: {
+    backgroundColor: '#111827',
+  },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
-    marginBottom: 24,
   },
   button: {
     flex: 1,
@@ -881,31 +916,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  cancelButton: {
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-    marginHorizontal: 16,
-  },
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-=======
-    marginTop: theme.spacing.md,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.xs,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
->>>>>>> main
   },
 });
