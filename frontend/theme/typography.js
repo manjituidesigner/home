@@ -2,8 +2,8 @@ export const typography = {
   fontFamilyRegular: 'System',
   fontFamilyBold: 'System',
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '700',
   },
   subtitle: {
     fontSize: 18,
@@ -14,6 +14,10 @@ export const typography = {
   },
   caption: {
     fontSize: 12,
+  },
+  price: {
+    fontSize: 20,
+    fontWeight: '700',
   },
 };
 

@@ -10,13 +10,14 @@ import {
   Modal,
   Linking,
   Image,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 
-const API_BASE_URL = 'https://home-backend-zc1d.onrender.com';
+const API_BASE_URL = 'http://localhost:5000';
 
 const PROPERTY_CATEGORIES = [
   { id: 'flat', label: 'Flat / Apartment', icon: 'home-outline' },
@@ -208,7 +209,7 @@ export default function PropertyScreen({ navigation }) {
   const [properties, setProperties] = useState([createEmptyProperty()]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('add'); // 'add' | 'list'
+  const [mode, setMode] = useState('list'); // 'list' | 'add'
   const [currentStep, setCurrentStep] = useState(1); // 1..4 for add flow
   const [propertyList, setPropertyList] = useState([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -216,7 +217,6 @@ export default function PropertyScreen({ navigation }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [openMenuForId, setOpenMenuForId] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all'); // all | available | occupied
 
   const activeProperty = properties[activeIndex];
 
@@ -365,20 +365,58 @@ export default function PropertyScreen({ navigation }) {
 
   const handleAddPhoto = async () => {
     try {
+      console.log('handleAddPhoto: upload tile pressed');
       const current = activeProperty.photos || [];
       if (current.length >= 5) {
         Alert.alert('Photos', 'You can upload up to 5 images.');
         return;
       }
+      const maxBytes = 5 * 1024 * 1024; // 5MB
 
+      // Web: use a native file input for reliable picker behavior
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+
+        input.onchange = () => {
+          const file = input.files && input.files[0];
+          if (!file) return;
+
+          if (file.size > maxBytes) {
+            Alert.alert(
+              'Image too large',
+              'Your image size is larger than 5MB. Please choose a smaller file.',
+            );
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result;
+            if (typeof result === 'string') {
+              updateActiveProperty({ photos: [...current, result] });
+            }
+          };
+          reader.readAsDataURL(file);
+        };
+
+        input.click();
+        return;
+      }
+
+      // Native (Android/iOS): use Expo Image Picker
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow access to your photos to upload property images.');
+        Alert.alert(
+          'Permission required',
+          'Please allow access to your photos to upload property images.',
+        );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaType.Images,
         allowsMultipleSelection: false,
         quality: 0.7,
         base64: true,
@@ -387,9 +425,23 @@ export default function PropertyScreen({ navigation }) {
       if (result.canceled || !result.assets || !result.assets.length) return;
 
       const asset = result.assets[0];
-      const dataUrl = asset.base64
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
+      const base64 = asset.base64 || '';
+      const approxBytes = (base64.length * 3) / 4;
+
+      if (!base64) {
+        Alert.alert('Photos', 'Unable to read selected image. Please try another file.');
+        return;
+      }
+
+      if (approxBytes > maxBytes) {
+        Alert.alert(
+          'Image too large',
+          'Your image size is larger than 5MB. Please choose a smaller file.',
+        );
+        return;
+      }
+
+      const dataUrl = `data:image/jpeg;base64,${base64}`;
       updateActiveProperty({ photos: [...current, dataUrl] });
     } catch (e) {
       Alert.alert('Photos', 'Unable to pick image. Please try again.');
@@ -469,7 +521,7 @@ export default function PropertyScreen({ navigation }) {
         }]);
       }
       fetchPropertyList();
-      setActiveTab('list');
+      setMode('list');
     } catch (error) {
       Alert.alert('Error', 'Unable to save property. Please try again.');
     } finally {
@@ -496,7 +548,7 @@ export default function PropertyScreen({ navigation }) {
     setProperties([merged]);
     setActiveIndex(0);
     setEditingPropertyId(item._id);
-    setActiveTab('add');
+    setMode('add');
   };
 
   const confirmDeleteProperty = (item) => {
@@ -564,43 +616,41 @@ export default function PropertyScreen({ navigation }) {
 
   return (
     <ScreenLayout
-      title="Property"
+      title={mode === 'add' ? 'Add Property' : 'My Property'}
+      headerRight={
+        mode === 'add' ? (
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => {
+              setMode('list');
+              setEditingPropertyId(null);
+              setCurrentStep(1);
+            }}
+          >
+            <Ionicons name="chevron-back" size={18} color="#ffffff" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.headerAddButton}
+            onPress={() => {
+              setMode('add');
+              setProperties([createEmptyProperty()]);
+              setActiveIndex(0);
+              setEditingPropertyId(null);
+              setCurrentStep(1);
+            }}
+          >
+            <Text style={styles.headerAddButtonLabel}>+</Text>
+          </TouchableOpacity>
+        )
+      }
       onPressMenu={() => {
         if (navigation && navigation.openDrawer) {
           navigation.openDrawer();
         }
       }}
     >
-      <View style={styles.tabsRow}>
-        <TouchableOpacity
-          onPress={() => setActiveTab('list')}
-          style={[styles.tab, activeTab === 'list' && styles.tabActive]}
-        >
-          <Text
-            style={[styles.tabLabel, activeTab === 'list' && styles.tabLabelActive]}
-          >
-            My Property
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            setActiveTab('add');
-            setProperties([createEmptyProperty()]);
-            setActiveIndex(0);
-            setEditingPropertyId(null);
-            setCurrentStep(1);
-          }}
-          style={[styles.tab, activeTab === 'add' && styles.tabActive]}
-        >
-          <Text
-            style={[styles.tabLabel, activeTab === 'add' && styles.tabLabelActive]}
-          >
-            Add New
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeTab === 'add' ? (
+      {mode === 'add' ? (
         <>
           {/* Top step progress */}
           <View style={styles.stepHeader}>
@@ -626,23 +676,22 @@ export default function PropertyScreen({ navigation }) {
               <Text style={styles.sectionTitle}>Property Details</Text>
 
           <View style={styles.photoSection}>
-            <Text style={styles.subSectionTitle}>Upload Property Photos</Text>
-            <Text style={styles.photoHint}>Upload up to 5 images of your property</Text>
-
-            <View style={styles.photoUploadBox}>
-              <Text style={styles.photoUploadTitle}>Add Photos</Text>
-              <Text style={styles.photoUploadSubtitle}>
-                Upload up to 5 images of your property
-              </Text>
-              <TouchableOpacity
-                style={styles.photoUploadButton}
-                onPress={handleAddPhoto}
-              >
-                <Text style={styles.photoUploadButtonLabel}>Upload</Text>
-              </TouchableOpacity>
-            </View>
-
+            <Text style={styles.subSectionTitle}>Upload Images (max 5)</Text>
             <View style={styles.photoGridRow}>
+              {(activeProperty.photos || []).length < 5 && (
+                <TouchableOpacity
+                  style={styles.photoAddTile}
+                  onPress={handleAddPhoto}
+                >
+                  <Ionicons
+                    name="camera-outline"
+                    size={20}
+                    color={theme.colors.accent}
+                  />
+                  <Text style={styles.photoAddTileLabel}>Add</Text>
+                </TouchableOpacity>
+              )}
+
               {(activeProperty.photos || []).map((uri, index) => (
                 <View key={uri} style={styles.photoThumbWrapper}>
                   <Image source={{ uri }} style={styles.photoThumb} />
@@ -654,15 +703,6 @@ export default function PropertyScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
               ))}
-
-              {(activeProperty.photos || []).length < 5 && (
-                <TouchableOpacity
-                  style={styles.photoAddTile}
-                  onPress={handleAddPhoto}
-                >
-                  <Ionicons name="add" size={24} color={theme.colors.primary} />
-                </TouchableOpacity>
-              )}
             </View>
           </View>
 
@@ -1262,33 +1302,6 @@ export default function PropertyScreen({ navigation }) {
       </View>
       </>
       ) : (
-        <>
-        <View style={styles.filterTabsRow}>
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'available', label: 'Vacant' },
-            { id: 'occupied', label: 'Occupied' },
-          ].map((tab) => (
-            <TouchableOpacity
-              key={tab.id}
-              onPress={() => setStatusFilter(tab.id)}
-              style={[
-                styles.filterTab,
-                statusFilter === tab.id && styles.filterTabActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterTabLabel,
-                  statusFilter === tab.id && styles.filterTabLabelActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -1297,17 +1310,25 @@ export default function PropertyScreen({ navigation }) {
           {loadingList ? (
             <Text style={styles.emptyText}>Loading properties...</Text>
           ) : propertyList.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No properties found. Add a new property to get started.
-            </Text>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                Still you didn't add any property yet. Please add a property.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyAddButton}
+                onPress={() => {
+                  setMode('add');
+                  setProperties([createEmptyProperty()]);
+                  setActiveIndex(0);
+                  setEditingPropertyId(null);
+                  setCurrentStep(1);
+                }}
+              >
+                <Text style={styles.emptyAddButtonLabel}>Add Property</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
-            propertyList
-              .filter((item, index) => {
-                const derivedStatus = item.status || (index % 2 === 1 ? 'occupied' : 'available');
-                if (statusFilter === 'all') return true;
-                return derivedStatus === statusFilter;
-              })
-              .map((item, index) => {
+            propertyList.map((item, index) => {
               const amenitiesText =
                 Array.isArray(item.amenities) && item.amenities.length
                   ? item.amenities.join(', ')
@@ -1500,145 +1521,105 @@ export default function PropertyScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
+      headerAddButton: {
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 999,
+        backgroundColor: theme.colors.primaryDark,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      headerAddButtonLabel: {
+        color: '#ffffff',
+        fontSize: 18,
+        fontWeight: '700',
+      },
+      headerIconButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: theme.colors.primaryDark,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      scroll: {
+        flex: 1,
+      },
+      scrollContent: {
     paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.sm,
   },
   stepHeader: {
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
   stepLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.textSecondary,
-    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
   stepBarBackground: {
-    height: 3,
+    marginTop: 6,
+    width: '100%',
+    height: 8,
     borderRadius: 999,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(79,63,237,0.18)',
     overflow: 'hidden',
   },
   stepBarFill: {
-    height: 3,
+    height: '100%',
     borderRadius: 999,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryDark,
   },
-  tabsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  tab: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginRight: theme.spacing.sm,
-    backgroundColor: '#ffffff',
-  },
-  tabActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  tabLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  tabLabelActive: {
-    color: '#ffffff',
-  },
-  addMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: theme.colors.primary,
-    marginLeft: 'auto',
-  },
-  addMoreLabel: {
-    marginLeft: 4,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
+  // Step sections: full-width, no card background
   sectionCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
+  },
+  // Large section heading with light underline
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.colors.primary,
     marginBottom: theme.spacing.sm,
-    marginHorizontal: 0,
-    borderWidth: 0,
-    borderColor: 'transparent',
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.35)',
   },
   photoSection: {
     marginBottom: theme.spacing.md,
   },
-  photoHint: {
-    marginTop: 2,
-    marginBottom: theme.spacing.sm,
-    fontSize: 12,
-    color: theme.colors.textSecondary,
+  photoGridRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: theme.spacing.sm,
+    gap: 10,
   },
-  photoUploadBox: {
+  photoAddTile: {
+    width: 96,
+    height: 96,
+    borderRadius: 18,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: '#D1D5DB',
-    borderRadius: 16,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F9FAFB',
-    marginBottom: theme.spacing.sm,
   },
-  photoUploadTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  photoUploadSubtitle: {
+  photoAddTileLabel: {
+    marginTop: 4,
     fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.sm,
-    textAlign: 'center',
-  },
-  photoUploadButton: {
-    marginTop: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: theme.colors.primary,
-  },
-  photoUploadButtonLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  photoGridRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: theme.spacing.sm,
+    fontWeight: '500',
+    color: theme.colors.accent,
   },
   photoThumbWrapper: {
-    width: 90,
-    height: 90,
-    borderRadius: 16,
+    width: 96,
+    height: 96,
+    borderRadius: 18,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginRight: theme.spacing.sm,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#E5E7EB',
+    position: 'relative',
   },
   photoThumb: {
     width: '100%',
@@ -1652,7 +1633,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(239,68,68,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1660,33 +1641,24 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 12,
     fontWeight: '700',
+    lineHeight: 12,
   },
-  photoAddTile: {
-    width: 90,
-    height: 90,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#D1D5DB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
+  emptyText: {
+    marginTop: theme.spacing.lg,
+    textAlign: 'center',
+    color: theme.colors.textSecondary,
+    fontSize: 14,
   },
-  sectionTitle: {
-    fontSize: 16,
+  emptyTextLink: {
+    color: theme.colors.primary,
     fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.sm,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.primary,
-    paddingLeft: theme.spacing.sm,
   },
   fieldGroup: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   fieldGroupRow: {
     flexDirection: 'row',
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   fieldLabel: {
     fontSize: 13,
@@ -1772,13 +1744,14 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: theme.spacing.xs,
-    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   chipRowWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   chip: {
     paddingHorizontal: theme.spacing.md,
@@ -1903,12 +1876,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: theme.colors.primary,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: 'transparent',
   },
   viewDetailsLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#ffffff',
+    color: theme.colors.primary,
   },
   propertyDetailsSection: {
     marginTop: 8,

@@ -10,8 +10,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#1DA1F2', // Twitter blue
-        primaryDark: '#1A8CD8',
+        primary: '#1A47ED', // main heading color
+        primaryDark: '#4F3FED', // primary button background
       },
     },
   },

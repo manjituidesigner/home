@@ -19,12 +19,12 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: theme.spacing.md,
     borderRadius: 999,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryDark,
     alignItems: 'center',
   },
   label: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
   },
 });
