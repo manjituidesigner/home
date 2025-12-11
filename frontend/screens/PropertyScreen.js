@@ -1481,9 +1481,7 @@ export default function PropertyScreen({ navigation }) {
             })
           )}
         </ScrollView>
-        </>
       )}
-
       <Modal
         visible={showDeleteModal}
         transparent
@@ -1518,34 +1516,35 @@ export default function PropertyScreen({ navigation }) {
       </Modal>
     </ScreenLayout>
   );
+
 }
 
 const styles = StyleSheet.create({
-      headerAddButton: {
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 999,
-        backgroundColor: theme.colors.primaryDark,
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-      headerAddButtonLabel: {
-        color: '#ffffff',
-        fontSize: 18,
-        fontWeight: '700',
-      },
-      headerIconButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: theme.colors.primaryDark,
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-      scroll: {
-        flex: 1,
-      },
-      scrollContent: {
+  headerAddButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAddButtonLabel: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.sm,
   },
@@ -1722,400 +1721,213 @@ const styles = StyleSheet.create({
   optionLabelSelected: {
     color: '#ffffff',
   },
-  radioOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterSelected: {
-    borderColor: '#ffffff',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  radioInner: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#ffffff',
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-  },
-  chipRowWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-  },
-  chip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#ffffff',
-    marginRight: theme.spacing.xs,
-    marginBottom: theme.spacing.xs,
-  },
-  chipSelected: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  chipLabel: {
-    fontSize: 13,
-    color: theme.colors.text,
-    fontWeight: '500',
-  },
-  chipLabelSelected: {
+  headerAddButtonLabel: {
     color: '#ffffff',
-  },
-  flex1: {
-    flex: 1,
-  },
-  mr8: {
-    marginRight: 8,
-  },
-  saveButton: {
-    marginTop: theme.spacing.md,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveButtonLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  emptyText: {
-    marginTop: theme.spacing.lg,
-    textAlign: 'center',
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-  },
-  propertyCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    marginBottom: theme.spacing.md,
-    overflow: 'hidden',
-    // subtle shadow like card in reference
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  propertyCardClosed: {
-    opacity: 0.5,
-  },
-  propertyCoverImage: {
-    width: '100%',
-    height: 160,
-    resizeMode: 'cover',
-  },
-  propertyHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  propertyHeaderText: {
-    flex: 1,
-    marginRight: theme.spacing.sm,
-  },
-  propertyCardBody: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-  },
-  propertyName: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.colors.text,
-  },
-  propertySubtitle: {
-    marginTop: 2,
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-  },
-  renterLabel: {
-    marginTop: 2,
-    fontSize: 13,
-    color: theme.colors.primary,
-    fontWeight: '600',
-  },
-  propertyStatusText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#10B981',
-    marginBottom: 4,
-  },
-  propertyAmenitiesText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  propertyTenantText: {
-    marginTop: 2,
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  propertyFooterRow: {
-    marginTop: theme.spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  viewDetailsButton: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: 'transparent',
-  },
-  viewDetailsLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-  propertyDetailsSection: {
-    marginTop: 8,
-  },
-  propertyMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  metaLabel: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontWeight: '500',
-  },
-  metaValue: {
-    fontSize: 13,
-    color: theme.colors.text,
-    fontWeight: '600',
-  },
-  metaSectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  cardActionsColumn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  editCardButton: {
-    marginLeft: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#ffffff',
-  },
-  editCardButtonDisabled: {
-    opacity: 0.4,
-  },
-  editCardButtonLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  editCardButtonLabelDisabled: {
-    color: theme.colors.textSecondary,
-  },
-  deleteCardButton: {
-    marginLeft: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
-    paddingVertical: 6,
-  },
-  deleteCardButtonLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#dc2626',
-  },
-  statusPill: {
-    marginLeft: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  statusAvailable: {
-    backgroundColor: theme.colors.primary,
-  },
-  statusOccupied: {
-    backgroundColor: '#111827',
-  },
-  moreButton: {
-    paddingHorizontal: theme.spacing.xs,
-    paddingVertical: 6,
-  },
-  cardMenu: {
-    position: 'absolute',
-    top: 40,
-    right: 12,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingVertical: 4,
-    minWidth: 140,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-    zIndex: 20,
-  },
-  cardMenuItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  cardMenuText: {
-    fontSize: 14,
-    color: theme.colors.text,
-  },
-  cardMenuTextDisabled: {
-    color: theme.colors.textSecondary,
-  },
-  cardMenuTextDelete: {
-    color: '#dc2626',
-    fontWeight: '600',
-  },
-  stepBottomBar: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: '#ffffff',
-  },
-  stepBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  stepSecondaryButton: {
-    flex: 1,
-    borderRadius: 999,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#F3F4F6',
-  },
-  stepSecondaryLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  stepSecondarySpacer: {
-    flex: 1,
-  },
-  stepPrimaryButton: {
-    flex: 2,
-    backgroundColor: theme.colors.primary,
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepPrimaryLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  filterTabsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-  },
-  filterTab: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#ffffff',
-    marginRight: theme.spacing.sm,
-  },
-  filterTabActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  filterTabLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  filterTabLabelActive: {
-    color: '#ffffff',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalCard: {
-    width: '80%',
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: theme.colors.text,
-    marginBottom: 8,
-  },
-  modalMessage: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: theme.spacing.md,
-  },
-  modalActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  modalButton: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginLeft: theme.spacing.sm,
-  },
-  modalCancelButton: {
-    backgroundColor: '#f3f4f6',
-  },
-  modalDeleteButton: {
-    backgroundColor: '#dc2626',
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  modalDeleteText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    radioOuterSelected: {
+      borderColor: '#ffffff',
+      backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    radioInner: {
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      backgroundColor: '#ffffff',
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: theme.spacing.sm,
+    },
+    propertyCard: {
+      backgroundColor: '#ffffff',
+      borderRadius: 18,
+      overflow: 'hidden',
+      marginBottom: theme.spacing.md,
+    },
+    propertyCardClosed: {
+      opacity: 0.5,
+    },
+    propertyCoverImage: {
+      width: '100%',
+      height: 160,
+      resizeMode: 'cover',
+    },
+    propertyCardBody: {
+      padding: theme.spacing.md,
+    },
+    propertyStatusText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      marginBottom: 4,
+    },
+    propertyName: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: theme.colors.text,
+      marginBottom: 4,
+    },
+    propertySubtitle: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.textSecondary,
+      marginBottom: 8,
+    },
+    propertyAmenitiesText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.textSecondary,
+      marginBottom: 8,
+    },
+    propertyTenantText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.textSecondary,
+      marginBottom: 8,
+    },
+    propertyFooterRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: theme.spacing.md,
+    },
+    viewDetailsButton: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: 10,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    viewDetailsLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#ffffff',
+    },
+    cardActionsColumn: {
+      flexDirection: 'column',
+      alignItems: 'flex-end',
+    },
+    statusPill: {
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 6,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statusAvailable: {
+      backgroundColor: theme.colors.success,
+    },
+    statusOccupied: {
+      backgroundColor: theme.colors.error,
+    },
+    statusText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#ffffff',
+    },
+    moreButton: {
+      marginLeft: theme.spacing.sm,
+      padding: 6,
+      borderRadius: 999,
+      backgroundColor: theme.colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cardMenu: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      backgroundColor: '#ffffff',
+      borderRadius: 12,
+      overflow: 'hidden',
+      shadowColor: '#000000',
+      shadowOpacity: 0.1,
+      shadowRadius: 10,
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+    },
+    cardMenuItem: {
+      padding: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    cardMenuText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.text,
+    },
+    cardMenuTextDisabled: {
+      color: theme.colors.textSecondary,
+    },
+    cardMenuTextDelete: {
+      color: theme.colors.error,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalCard: {
+      backgroundColor: '#ffffff',
+      borderRadius: 18,
+      overflow: 'hidden',
+      padding: theme.spacing.md,
+      width: '80%',
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: theme.colors.text,
+      marginBottom: theme.spacing.sm,
+    },
+    modalMessage: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
+    },
+    modalActionsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    modalButton: {
+      padding: theme.spacing.md,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalCancelButton: {
+      backgroundColor: theme.colors.background,
+      borderColor: theme.colors.border,
+      borderWidth: 1,
+    },
+    modalCancelText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.text,
+    },
+    modalDeleteButton: {
+      backgroundColor: theme.colors.error,
+    },
+    modalDeleteText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#ffffff',
+    },
+    statusText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#ffffff',
+    },
 });
