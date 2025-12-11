@@ -136,6 +136,10 @@ function createEmptyProperty() {
     parkingType: 'none',
     parkingBikeCount: '',
     parkingCarCount: '',
+    // Optional notes when rules are "with conditions"
+    drinksPolicyNotes: '',
+    smokingPolicyNotes: '',
+    lateNightPolicyNotes: '',
     preferredTenantTypes: [],
     totalRooms: '',
     lateNightMode: 'anytime', // anytime | till_time
@@ -217,6 +221,7 @@ export default function PropertyScreen({ navigation }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [openMenuForId, setOpenMenuForId] = useState(null);
+  const [customAmenity, setCustomAmenity] = useState('');
 
   const activeProperty = properties[activeIndex];
 
@@ -290,6 +295,27 @@ export default function PropertyScreen({ navigation }) {
       ? current.filter((t) => t !== name)
       : [...current, name];
     updateActiveProperty({ preferredTenantTypes: next });
+  };
+
+  const handleSelectAllTenantTypes = () => {
+    const allSelected =
+      Array.isArray(activeProperty.preferredTenantTypes) &&
+      activeProperty.preferredTenantTypes.length === TENANT_TYPES.length;
+    updateActiveProperty({
+      preferredTenantTypes: allSelected ? [] : [...TENANT_TYPES],
+    });
+  };
+
+  const handleAddCustomAmenity = () => {
+    const value = (customAmenity || '').trim();
+    if (!value) return;
+    const current = activeProperty.amenities || [];
+    if (current.includes(value)) {
+      setCustomAmenity('');
+      return;
+    }
+    updateActiveProperty({ amenities: [...current, value] });
+    setCustomAmenity('');
   };
 
   const buildTenantSummary = () => {
@@ -392,15 +418,32 @@ export default function PropertyScreen({ navigation }) {
           }
 
           const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result;
-            if (typeof result === 'string') {
-              updateActiveProperty({ photos: [...current, result] });
+          reader.onloadend = async () => {
+            try {
+              const result = reader.result;
+              if (typeof result !== 'string') return;
+
+              const resp = await fetch(`${API_BASE_URL}/api/properties/upload-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dataUrl: result }),
+              });
+              if (!resp.ok) {
+                Alert.alert('Photos', 'Failed to upload image. Please try again.');
+                return;
+              }
+              const body = await resp.json();
+              if (!body?.url) {
+                Alert.alert('Photos', 'Upload did not return an image URL.');
+                return;
+              }
+              updateActiveProperty({ photos: [...current, body.url] });
+            } catch (err) {
+              Alert.alert('Photos', 'Unable to upload image. Please try again.');
             }
           };
           reader.readAsDataURL(file);
         };
-
         input.click();
         return;
       }
@@ -441,8 +484,25 @@ export default function PropertyScreen({ navigation }) {
         return;
       }
 
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
-      updateActiveProperty({ photos: [...current, dataUrl] });
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/properties/upload-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: `data:image/jpeg;base64,${base64}` }),
+        });
+        if (!resp.ok) {
+          Alert.alert('Photos', 'Failed to upload image. Please try again.');
+          return;
+        }
+        const body = await resp.json();
+        if (!body?.url) {
+          Alert.alert('Photos', 'Upload did not return an image URL.');
+          return;
+        }
+        updateActiveProperty({ photos: [...current, body.url] });
+      } catch (err) {
+        Alert.alert('Photos', 'Unable to upload image. Please try again.');
+      }
     } catch (e) {
       Alert.alert('Photos', 'Unable to pick image. Please try again.');
     }
@@ -1091,6 +1151,39 @@ export default function PropertyScreen({ navigation }) {
                 onPress={() => toggleAmenity(a)}
               />
             ))}
+            {(activeProperty.amenities || [])
+              .filter((a) => !AMENITIES.includes(a))
+              .map((a) => (
+                <Chip
+                  key={a}
+                  label={a}
+                  selected
+                  onPress={() => toggleAmenity(a)}
+                />
+              ))}
+          </View>
+
+          <View style={[styles.fieldGroupRow, { marginTop: theme.spacing.md }]}>
+            <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
+              <Text style={styles.fieldLabel}>Add custom amenity</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Geyser, CCTV"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={customAmenity}
+                onChangeText={setCustomAmenity}
+              />
+            </View>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>{'\u00A0'}</Text>
+              <TouchableOpacity
+                style={styles.addRoomButton}
+                onPress={handleAddCustomAmenity}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.addMoreLabel}>Add</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         )}
@@ -1116,6 +1209,18 @@ export default function PropertyScreen({ navigation }) {
                   />
                 ))}
               </View>
+
+              {activeProperty[rule.id] === 'conditional' && (
+                <TextInput
+                  style={[styles.input, { marginTop: 8 }]}
+                  placeholder="Add conditions or notes"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={activeProperty[`${rule.id}Notes`] || ''}
+                  onChangeText={(text) =>
+                    updateActiveProperty({ [`${rule.id}Notes`]: text })
+                  }
+                />
+              )}
 
               {rule.id === 'lateNightPolicy' &&
                 activeProperty.lateNightPolicy === 'allowed' && (
@@ -1221,38 +1326,53 @@ export default function PropertyScreen({ navigation }) {
 
           {activeProperty.parkingType !== 'none' && (
             <View style={styles.fieldGroupRow}>
-              <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
-                <Text style={styles.fieldLabel}>No. of bikes</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={activeProperty.parkingBikeCount}
-                  onChangeText={(text) =>
-                    updateActiveProperty({ parkingBikeCount: text })
-                  }
-                />
-              </View>
-              <View style={[styles.fieldGroup, styles.flex1]}>
-                <Text style={styles.fieldLabel}>No. of cars</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={activeProperty.parkingCarCount}
-                  onChangeText={(text) =>
-                    updateActiveProperty({ parkingCarCount: text })
-                  }
-                />
-              </View>
+              {(activeProperty.parkingType === 'bike' ||
+                activeProperty.parkingType === 'both') && (
+                <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
+                  <Text style={styles.fieldLabel}>No. of bikes</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={activeProperty.parkingBikeCount}
+                    onChangeText={(text) =>
+                      updateActiveProperty({ parkingBikeCount: text })
+                    }
+                  />
+                </View>
+              )}
+
+              {(activeProperty.parkingType === 'car' ||
+                activeProperty.parkingType === 'both') && (
+                <View style={[styles.fieldGroup, styles.flex1]}>
+                  <Text style={styles.fieldLabel}>No. of cars</Text>
+                  <TextInput
+                    style={styles.input}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={activeProperty.parkingCarCount}
+                    onChangeText={(text) =>
+                      updateActiveProperty({ parkingCarCount: text })
+                    }
+                  />
+                </View>
+              )}
             </View>
           )}
 
           {/* Preferred tenant type */}
           <Text style={styles.subSectionTitle}>Preferred Tenant Type</Text>
           <View style={styles.chipRowWrap}>
+            <Chip
+              label="All"
+              selected={
+                Array.isArray(activeProperty.preferredTenantTypes) &&
+                activeProperty.preferredTenantTypes.length === TENANT_TYPES.length
+              }
+              onPress={handleSelectAllTenantTypes}
+            />
             {TENANT_TYPES.map((t) => (
               <Chip
                 key={t}
@@ -1725,209 +1845,333 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '700',
-      borderColor: theme.colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    radioOuterSelected: {
-      borderColor: '#ffffff',
-      backgroundColor: 'rgba(255,255,255,0.2)',
-    },
-    radioInner: {
-      width: 9,
-      height: 9,
-      borderRadius: 5,
-      backgroundColor: '#ffffff',
-    },
-    chipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      marginTop: theme.spacing.sm,
-    },
-    propertyCard: {
-      backgroundColor: '#ffffff',
-      borderRadius: 18,
-      overflow: 'hidden',
-      marginBottom: theme.spacing.md,
-    },
-    propertyCardClosed: {
-      opacity: 0.5,
-    },
-    propertyCoverImage: {
-      width: '100%',
-      height: 160,
-      resizeMode: 'cover',
-    },
-    propertyCardBody: {
-      padding: theme.spacing.md,
-    },
-    propertyStatusText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.textSecondary,
-      marginBottom: 4,
-    },
-    propertyName: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: theme.colors.text,
-      marginBottom: 4,
-    },
-    propertySubtitle: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.textSecondary,
-      marginBottom: 8,
-    },
-    propertyAmenitiesText: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.textSecondary,
-      marginBottom: 8,
-    },
-    propertyTenantText: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.textSecondary,
-      marginBottom: 8,
-    },
-    propertyFooterRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: theme.spacing.md,
-    },
-    viewDetailsButton: {
-      backgroundColor: theme.colors.primary,
-      borderRadius: 10,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    viewDetailsLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#ffffff',
-    },
-    cardActionsColumn: {
-      flexDirection: 'column',
-      alignItems: 'flex-end',
-    },
-    statusPill: {
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 6,
-      borderRadius: 999,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    statusAvailable: {
-      backgroundColor: theme.colors.success,
-    },
-    statusOccupied: {
-      backgroundColor: theme.colors.error,
-    },
-    statusText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#ffffff',
-    },
-    moreButton: {
-      marginLeft: theme.spacing.sm,
-      padding: 6,
-      borderRadius: 999,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cardMenu: {
-      position: 'absolute',
-      top: 0,
-      right: 0,
-      backgroundColor: '#ffffff',
-      borderRadius: 12,
-      overflow: 'hidden',
-      shadowColor: '#000000',
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-      shadowOffset: {
-        width: 0,
-        height: 2,
-      },
-    },
-    cardMenuItem: {
-      padding: theme.spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-    },
-    cardMenuText: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.text,
-    },
-    cardMenuTextDisabled: {
-      color: theme.colors.textSecondary,
-    },
-    cardMenuTextDelete: {
-      color: theme.colors.error,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalCard: {
-      backgroundColor: '#ffffff',
-      borderRadius: 18,
-      overflow: 'hidden',
-      padding: theme.spacing.md,
-      width: '80%',
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: theme.colors.text,
-      marginBottom: theme.spacing.sm,
-    },
-    modalMessage: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.md,
-    },
-    modalActionsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    modalButton: {
-      padding: theme.spacing.md,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    modalCancelButton: {
-      backgroundColor: theme.colors.background,
-      borderColor: theme.colors.border,
-      borderWidth: 1,
-    },
-    modalCancelText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.text,
-    },
-    modalDeleteButton: {
-      backgroundColor: theme.colors.error,
-    },
-    modalDeleteText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#ffffff',
-    },
-    statusText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#ffffff',
-    },
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  radioOuterSelected: {
+    borderColor: '#ffffff',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#ffffff',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: theme.spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+    marginRight: theme.spacing.xs,
+    marginBottom: theme.spacing.xs,
+  },
+  chipSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  chipLabelSelected: {
+    color: '#ffffff',
+  },
+  chipRowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: theme.spacing.sm,
+  },
+  subSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  roomSection: {
+    marginTop: theme.spacing.md,
+  },
+  roomCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  roomTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.colors.primary,
+    marginBottom: theme.spacing.sm,
+  },
+  addRoomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.primary,
+    marginTop: theme.spacing.sm,
+  },
+  addMoreLabel: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  summaryText: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  flex1: {
+    flex: 1,
+  },
+  mr8: {
+    marginRight: 8,
+  },
+  propertyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: theme.spacing.md,
+  },
+  propertyCardClosed: {
+    opacity: 0.5,
+  },
+  propertyCoverImage: {
+    width: '100%',
+    height: 160,
+    resizeMode: 'cover',
+  },
+  propertyCardBody: {
+    padding: theme.spacing.md,
+  },
+  propertyStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginBottom: 4,
+  },
+  propertyName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  propertySubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+  },
+  propertyAmenitiesText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+  },
+  propertyTenantText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+  },
+  propertyFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: theme.spacing.md,
+  },
+  viewDetailsButton: {
+    backgroundColor: theme.colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewDetailsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  cardActionsColumn: {
+    alignItems: 'flex-end',
+  },
+  statusPill: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusAvailable: {
+    backgroundColor: theme.colors.price,
+  },
+  statusOccupied: {
+    backgroundColor: theme.colors.textSecondary,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  moreButton: {
+    marginTop: 6,
+    padding: 4,
+    borderRadius: 999,
+    backgroundColor: '#EFF0F6',
+  },
+  cardMenu: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: '#F9FAFB',
+  },
+  cardMenuItem: {
+    paddingVertical: 6,
+  },
+  cardMenuText: {
+    fontSize: 14,
+    color: theme.colors.text,
+  },
+  cardMenuTextDisabled: {
+    color: theme.colors.textSecondary,
+  },
+  cardMenuTextDelete: {
+    color: theme.colors.error,
+  },
+  stepBottomBar: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: '#ffffff',
+  },
+  stepBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stepSecondaryButton: {
+    paddingVertical: 10,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  stepSecondaryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  stepSecondarySpacer: {
+    width: 120,
+  },
+  stepPrimaryButton: {
+    paddingVertical: 10,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepPrimaryLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  emptyState: {
+    marginTop: theme.spacing.xl,
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  emptyAddButton: {
+    marginTop: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  emptyAddButtonLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+    marginBottom: theme.spacing.sm,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.md,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: theme.spacing.sm,
+  },
+  modalButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginLeft: theme.spacing.sm,
+  },
+  modalCancelButton: {
+    backgroundColor: '#E5E7EB',
+  },
+  modalDeleteButton: {
+    backgroundColor: theme.colors.error,
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  modalDeleteText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
 });

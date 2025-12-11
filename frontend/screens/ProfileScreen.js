@@ -164,27 +164,33 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  const renderAddressFields = type => {
+  const renderAddressFields = (type) => {
     const address =
       type === 'current' ? formData.currentAddress : formData.permanentAddress;
     const isCurrent = type === 'current';
     const isPermanentEditable = type === 'permanent' && !sameAsCurrent;
 
-    const getFieldValue = field => {
-      if (!isCurrent && sameAsCurrent) {
-        return formData.currentAddress[field] || '';
-      }
-      return address[field] || '';
-    };
+    // If permanent is same as current, just show note
+    if (!isCurrent && sameAsCurrent) {
+      return (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionIndicator} />
+            <Text style={styles.sectionTitleText}>Permanent Address</Text>
+          </View>
+          <Text style={styles.sameAsText}>Same as current address</Text>
+        </View>
+      );
+    }
 
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          {isCurrent ? 'Current Address' : 'Permanent Address'}
-          {!isCurrent && sameAsCurrent && (
-            <Text style={styles.sameAsText}> (Same as current address)</Text>
-          )}
-        </Text>
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionIndicator} />
+          <Text style={styles.sectionTitleText}>
+            {isCurrent ? 'Current Address' : 'Permanent Address'}
+          </Text>
+        </View>
 
         {!isCurrent && isEditing && (
           <TouchableOpacity
@@ -200,222 +206,186 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         )}
 
-        {(!isCurrent && sameAsCurrent) ? null : (
-          <>
-            <View style={styles.inputGroup}>
+        <View style={styles.inputGroup}>
+          <MaterialIcons
+            name="location-on"
+            size={20}
+            color={theme.colors.primary}
+            style={styles.inputIcon}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder={`${isCurrent ? 'Current ' : 'Permanent '}Address`}
+            value={address.address}
+            onChangeText={(text) =>
+              handleInputChange(
+                'address',
+                text,
+                true,
+                isCurrent ? 'currentAddress' : 'permanentAddress',
+              )
+            }
+            editable={isEditing && (isCurrent || isPermanentEditable)}
+            placeholderTextColor="#9ca3af"
+          />
+        </View>
+
+        <View style={styles.row}>
+          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+            <MaterialIcons
+              name="location-city"
+              size={20}
+              color={theme.colors.primary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="City"
+              value={address.city}
+              onChangeText={(text) =>
+                handleInputChange(
+                  'city',
+                  text,
+                  true,
+                  isCurrent ? 'currentAddress' : 'permanentAddress',
+                )
+              }
+              editable={isEditing && (isCurrent || isPermanentEditable)}
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+
+          <View style={[styles.inputGroup, { flex: 1 }]}>
+            <MaterialIcons
+              name="map"
+              size={20}
+              color={theme.colors.primary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="District"
+              value={address.district}
+              onChangeText={(text) =>
+                handleInputChange(
+                  'district',
+                  text,
+                  true,
+                  isCurrent ? 'currentAddress' : 'permanentAddress',
+                )
+              }
+              editable={isEditing && (isCurrent || isPermanentEditable)}
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+        </View>
+
+        <View style={styles.row}>
+          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+            <MaterialIcons
+              name="public"
+              size={20}
+              color={theme.colors.primary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="State"
+              value={address.state}
+              onChangeText={(text) =>
+                handleInputChange(
+                  'state',
+                  text,
+                  true,
+                  isCurrent ? 'currentAddress' : 'permanentAddress',
+                )
+              }
+              editable={isEditing && (isCurrent || isPermanentEditable)}
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+
+          <View style={[styles.inputGroup, { flex: 1 }]}>
+            <MaterialIcons
+              name="flag"
+              size={20}
+              color={theme.colors.primary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Country"
+              value={address.country}
+              onChangeText={(text) =>
+                handleInputChange(
+                  'country',
+                  text,
+                  true,
+                  isCurrent ? 'currentAddress' : 'permanentAddress',
+                )
+              }
+              editable={false}
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+        </View>
+
+        {isCurrent && (
+          <View style={styles.row}>
+            <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
               <MaterialIcons
-                name="location-on"
-                size={20}
+                name="calendar-today"
+                size={18}
                 color={theme.colors.primary}
                 style={styles.inputIcon}
               />
               <TextInput
                 style={styles.input}
-                placeholder={`${
-                  isCurrent ? 'Current ' : 'Permanent '
-                }Address`}
-                value={
-                  isCurrent
-                    ? address.address
-                    : sameAsCurrent
-                    ? formData.currentAddress.address
-                    : address.address
-                }
-                onChangeText={text =>
+                placeholder="Years lived here"
+                value={address.years}
+                onChangeText={(text) =>
                   handleInputChange(
-                    'address',
+                    'years',
                     text,
                     true,
-                    isCurrent ? 'currentAddress' : 'permanentAddress',
+                    'currentAddress',
                   )
                 }
-                editable={isEditing && (isCurrent || isPermanentEditable)}
+                keyboardType="numeric"
+                editable={isEditing}
                 placeholderTextColor="#9ca3af"
               />
             </View>
 
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                <MaterialIcons
-                  name="location-city"
-                  size={20}
-                  color={theme.colors.primary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="City"
-                  value={
-                    isCurrent
-                      ? address.city
-                      : sameAsCurrent
-                      ? formData.currentAddress.city
-                      : address.city
-                  }
-                  onChangeText={text =>
-                    handleInputChange(
-                      'city',
-                      text,
-                      true,
-                      isCurrent ? 'currentAddress' : 'permanentAddress',
-                    )
-                  }
-                  editable={isEditing && (isCurrent || isPermanentEditable)}
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
-
-              <View style={[styles.inputGroup, { flex: 1 }]}>
-                <MaterialIcons
-                  name="map"
-                  size={20}
-                  color={theme.colors.primary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="District"
-                  value={
-                    isCurrent
-                      ? address.district
-                      : sameAsCurrent
-                      ? formData.currentAddress.district
-                      : address.district
-                  }
-                  onChangeText={text =>
-                    handleInputChange(
-                      'district',
-                      text,
-                      true,
-                      isCurrent ? 'currentAddress' : 'permanentAddress',
-                    )
-                  }
-                  editable={isEditing && (isCurrent || isPermanentEditable)}
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <MaterialIcons
+                name="calendar-month"
+                size={18}
+                color={theme.colors.primary}
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Months"
+                value={address.months}
+                onChangeText={(text) =>
+                  handleInputChange(
+                    'months',
+                    text,
+                    true,
+                    'currentAddress',
+                  )
+                }
+                keyboardType="numeric"
+                editable={isEditing}
+                placeholderTextColor="#9ca3af"
+              />
             </View>
-
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                <MaterialIcons
-                  name="public"
-                  size={20}
-                  color={theme.colors.primary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="State"
-                  value={
-                    isCurrent
-                      ? address.state
-                      : sameAsCurrent
-                      ? formData.currentAddress.state
-                      : address.state
-                  }
-                  onChangeText={text =>
-                    handleInputChange(
-                      'state',
-                      text,
-                      true,
-                      isCurrent ? 'currentAddress' : 'permanentAddress',
-                    )
-                  }
-                  editable={isEditing && (isCurrent || isPermanentEditable)}
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
-
-              <View style={[styles.inputGroup, { flex: 1 }]}>
-                <MaterialIcons
-                  name="flag"
-                  size={20}
-                  color={theme.colors.primary}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Country"
-                  value={address.country}
-                  onChangeText={text =>
-                    handleInputChange(
-                      'country',
-                      text,
-                      true,
-                      isCurrent ? 'currentAddress' : 'permanentAddress',
-                    )
-                  }
-                  editable={
-                    isEditing &&
-                    (isCurrent || isPermanentEditable) &&
-                    false
-                  } // Disabled for demo
-                  placeholderTextColor="#9ca3af"
-                />
-              </View>
-            </View>
-
-            {isCurrent && (
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={18}
-                    color={theme.colors.primary}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Years lived here"
-                    value={address.years}
-                    onChangeText={text =>
-                      handleInputChange(
-                        'years',
-                        text,
-                        true,
-                        'currentAddress',
-                      )
-                    }
-                    keyboardType="numeric"
-                    editable={isEditing}
-                    placeholderTextColor="#9ca3af"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <MaterialIcons
-                    name="calendar-month"
-                    size={18}
-                    color={theme.colors.primary}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Months"
-                    value={address.months}
-                    onChangeText={text =>
-                      handleInputChange(
-                        'months',
-                        text,
-                        true,
-                        'currentAddress',
-                      )
-                    }
-                    keyboardType="numeric"
-                    editable={isEditing}
-                    placeholderTextColor="#9ca3af"
-                  />
-                </View>
-              </View>
-            )}
-          </>
+          </View>
         )}
       </View>
     );
   };
-
-  // Header actions are rendered inside the screen header instead of using
-  // the navigation header (which is hidden in this stack).
 
   // Load saved data on mount
   useEffect(() => {
@@ -463,211 +433,188 @@ export default function ProfileScreen({ navigation }) {
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-        <View style={styles.header}>
-          <View style={styles.profileHeader}>
+          <View style={styles.profileCard}>
+            <Text style={styles.cardTitle}>Edit Profile</Text>
+
+            <View style={styles.avatarSection}>
+              <TouchableOpacity
+                style={styles.avatarContainer}
+                onPress={isEditing ? pickImage : null}
+                disabled={!isEditing}
+              >
+                {profileImage ? (
+                  <Image source={{ uri: profileImage }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.avatarPlaceholder}>
+                    <Ionicons
+                      name="person-outline"
+                      size={40}
+                      color="#94a3b8"
+                    />
+                  </View>
+                )}
+                {isEditing && (
+                  <View style={styles.cameraIcon}>
+                    <Ionicons
+                      name="camera-outline"
+                      size={18}
+                      color="#ffffff"
+                    />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.avatarLabel}>Add Photo</Text>
+              <Text style={styles.avatarSubLabel}>SELFIE ONLY</Text>
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionIndicator} />
+                <Text style={styles.sectionTitleText}>Basic Info</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full Name"
+                  value={formData.fullName}
+                  onChangeText={text => handleInputChange('fullName', text)}
+                  editable={isEditing}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email Address"
+                  value={formData.email}
+                  onChangeText={text => handleInputChange('email', text)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={isEditing}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Ionicons
+                  name="call-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Phone Number"
+                  value={formData.mobile}
+                  onChangeText={text => handleInputChange('mobile', text)}
+                  keyboardType="phone-pad"
+                  editable={isEditing}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Date of Birth (DD/MM/YYYY)"
+                  value={formData.dob}
+                  onChangeText={text => handleInputChange('dob', text)}
+                  editable={isEditing}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+            </View>
+
+            {renderAddressFields('current')}
+            {renderAddressFields('permanent')}
+          </View>
+        </ScrollView>
+
+        {isEditing && (
+          <View style={styles.bottomBar}>
             <TouchableOpacity
-              style={styles.avatarContainer}
-              onPress={isEditing ? pickImage : null}
-              disabled={!isEditing}
+              style={[styles.bottomButton, styles.bottomCancelButton]}
+              onPress={() => {
+                setIsEditing(false);
+                const loadSavedData = async () => {
+                  try {
+                    const jsonValue = await AsyncStorage.getItem(
+                      PROFILE_STORAGE_KEY,
+                    );
+                    if (jsonValue) {
+                      const savedProfile = JSON.parse(jsonValue);
+                      setFormData(prev => ({
+                        ...prev,
+                        ...savedProfile,
+                        currentAddress: {
+                          ...prev.currentAddress,
+                          ...savedProfile.currentAddress,
+                        },
+                        permanentAddress: {
+                          ...prev.permanentAddress,
+                          ...savedProfile.permanentAddress,
+                        },
+                      }));
+                      if (savedProfile.profileImage) {
+                        setProfileImage(savedProfile.profileImage);
+                      }
+                    }
+                  } catch (e) {
+                    // ignore load errors
+                  }
+                };
+                loadSavedData();
+              }}
             >
-              {profileImage ? (
-                <Image source={{ uri: profileImage }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="person-outline" size={40} color="#4b5563" />
-                </View>
-              )}
-              {isEditing && (
-                <View style={styles.cameraIcon}>
-                  <Ionicons name="camera-outline" size={18} color="#ffffff" />
-                </View>
-              )}
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: theme.colors.textSecondary || '#6b7280' },
+                ]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
 
-            <View style={styles.headerActions}>
-              {!isEditing && (
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => setIsEditing(true)}
-                >
-                  <Ionicons name="pencil-outline" size={16} color="#ffffff" />
-                  <Text style={styles.editButtonText}>Edit Profile</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {isEditing && (
-            <View style={styles.photoOptions}>
-              <TouchableOpacity
-                style={styles.photoOptionButton}
-                onPress={pickImage}
-              >
-                <Ionicons
-                  name="image-outline"
-                  size={18}
-                  color={theme.colors.textSecondary || '#6b7280'}
-                />
-                <Text style={styles.photoOptionText}>Gallery</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.photoOptionButton}
-                onPress={takePhoto}
-              >
-                <Ionicons
-                  name="camera-outline"
-                  size={18}
-                  color={theme.colors.textSecondary || '#6b7280'}
-                />
-                <Text style={styles.photoOptionText}>Camera</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-
-          <View style={styles.inputGroup}>
-            <Ionicons
-              name="person-outline"
-              size={20}
-              color={theme.colors.primary}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              value={formData.fullName}
-              onChangeText={text => handleInputChange('fullName', text)}
-              editable={isEditing}
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Ionicons
-              name="mail-outline"
-              size={20}
-              color={theme.colors.primary}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              value={formData.email}
-              onChangeText={text => handleInputChange('email', text)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              editable={isEditing}
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Ionicons
-              name="call-outline"
-              size={20}
-              color={theme.colors.primary}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Mobile Number"
-              value={formData.mobile}
-              onChangeText={text => handleInputChange('mobile', text)}
-              keyboardType="phone-pad"
-              editable={isEditing}
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Ionicons
-              name="calendar-outline"
-              size={20}
-              color={theme.colors.primary}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Date of Birth (DD/MM/YYYY)"
-              value={formData.dob}
-              onChangeText={text => handleInputChange('dob', text)}
-              editable={isEditing}
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-        </View>
-
-        {renderAddressFields('current')}
-        {renderAddressFields('permanent')}
-      </ScrollView>
-
-      {isEditing && (
-        <View style={styles.bottomBar}>
-          <TouchableOpacity
-            style={[styles.bottomButton, styles.bottomCancelButton]}
-            onPress={() => {
-              setIsEditing(false);
-              const loadSavedData = async () => {
-                try {
-                  const jsonValue = await AsyncStorage.getItem(
-                    PROFILE_STORAGE_KEY,
-                  );
-                  if (jsonValue) {
-                    const savedProfile = JSON.parse(jsonValue);
-                    setFormData(prev => ({
-                      ...prev,
-                      ...savedProfile,
-                      currentAddress: {
-                        ...prev.currentAddress,
-                        ...savedProfile.currentAddress,
-                      },
-                      permanentAddress: {
-                        ...prev.permanentAddress,
-                        ...savedProfile.permanentAddress,
-                      },
-                    }));
-                    if (savedProfile.profileImage) {
-                      setProfileImage(savedProfile.profileImage);
-                    }
-                  }
-                } catch (e) {
-                  // ignore load errors
-                }
-              };
-              loadSavedData();
-            }}
-          >
-            <Text
-              style={[
-                styles.buttonText,
-                { color: theme.colors.textSecondary || '#6b7280' },
-              ]}
+            <TouchableOpacity
+              style={[styles.bottomButton, styles.bottomUpdateButton]}
+              onPress={isProfileComplete ? handleUpdate : handleSave}
+              disabled={!isProfileComplete}
             >
-              Cancel
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.bottomButton, styles.bottomUpdateButton]}
-            onPress={isProfileComplete ? handleUpdate : handleSave}
-            disabled={!isProfileComplete}
-          >
-            <Ionicons name="save-outline" size={18} color="#ffffff" />
-            <Text
-              style={[
-                styles.buttonText,
-                { color: '#ffffff', marginLeft: 8 },
-                !isProfileComplete && { opacity: 0.7 },
-              ]}
-            >
-              {isProfileComplete ? 'Update' : 'Save'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+              <Ionicons name="checkmark" size={18} color="#ffffff" />
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: '#ffffff', marginLeft: 8 },
+                  !isProfileComplete && { opacity: 0.7 },
+                ]}
+              >
+                Save Details
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </ScreenLayout>
   );
@@ -687,18 +634,25 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 120,
   },
-  header: {
+  profileCard: {
     backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
     paddingHorizontal: 0,
     paddingTop: 8,
-    paddingBottom: 16,
-    marginBottom: 8,
+    paddingBottom: 24,
   },
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: theme.colors.text,
     marginBottom: 16,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
   avatarContainer: {
     position: 'relative',
@@ -720,8 +674,8 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: '100%',
     height: '100%',
-    borderRadius: 50,
-    backgroundColor: '#ffffff',
+    borderRadius: 52,
+    backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -738,57 +692,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#ffffff',
   },
-  headerActions: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 999,
+  sectionIndicator: {
+    width: 4,
+    height: 20,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 2,
+    marginRight: 8,
   },
-  editButtonText: {
-    color: '#fff',
-    marginLeft: 6,
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  photoOptions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  photoOptionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    marginHorizontal: 6,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  photoOptionText: {
-    marginLeft: 6,
-    color: theme.colors.textSecondary || '#6b7280',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  section: {
-    backgroundColor: 'transparent',
-    paddingVertical: 12,
-    paddingHorizontal: 0,
-    marginBottom: 8,
-  },
-  sectionTitle: {
+  sectionTitleText: {
     fontSize: 18,
     fontWeight: '600',
     color: theme.colors.primary,
-    marginBottom: 12,
   },
   inputGroup: {
     flexDirection: 'row',

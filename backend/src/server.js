@@ -2,10 +2,12 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+
+// Load environment variables *before* importing routes that depend on them
+dotenv.config();
+
 const mongoose = require('mongoose');
 const propertyRoutes = require('./routes/propertyRoutes');
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;

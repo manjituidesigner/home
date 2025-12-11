@@ -1,47 +1,35 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
-const sharp = require('sharp');
+const cloudinary = require('../config/cloudinary');
 const propertyService = require('../services/propertyService');
 
-// Multer setup: store in memory, enforce 5MB max
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-});
-
-// Upload single property image, compress and save to /uploads/properties
-router.post('/upload-image', upload.single('photo'), async (req, res) => {
+// Upload single property image to Cloudinary.
+// Expects JSON body: { dataUrl: 'data:image/jpeg;base64,...' }
+router.post('/upload-image', async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+    const { dataUrl } = req.body || {};
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      return res.status(400).json({ message: 'No image data provided' });
     }
 
-    const uploadsDir = path.join(__dirname, '..', 'uploads', 'properties');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
+    // Optional basic size guard (5MB) based on base64 length
+    const base64Part = dataUrl.split(',')[1] || '';
+    const approxBytes = (base64Part.length * 3) / 4;
+    const maxBytes = 5 * 1024 * 1024;
+    if (approxBytes > maxBytes) {
+      return res.status(413).json({
+        message: 'Image size is larger than 5MB. Please choose a smaller file.',
+      });
     }
 
-    const timestamp = Date.now();
-    const filename = `property_${timestamp}.jpg`;
-    const filePath = path.join(uploadsDir, filename);
+    const result = await cloudinary.uploader.upload(dataUrl, {
+      folder: 'properties',
+      transformation: [{ width: 1200, height: 1200, crop: 'limit' }],
+    });
 
-    await sharp(req.file.buffer)
-      .resize(1200, 1200, { fit: 'inside' })
-      .jpeg({ quality: 80 })
-      .toFile(filePath);
-
-    const publicUrl = `/uploads/properties/${filename}`;
-    return res.status(201).json({ url: publicUrl });
+    return res.status(201).json({ url: result.secure_url });
   } catch (err) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res
-        .status(413)
-        .json({ message: 'Image size is larger than 5MB. Please choose a smaller file.' });
-    }
-    console.error('Error uploading image', err);
+    console.error('Error uploading image to Cloudinary', err);
     return res.status(500).json({ message: 'Failed to upload image' });
   }
 });
