@@ -23,6 +23,8 @@ const PropertySchema = new mongoose.Schema(
     rentRoomScope: { type: String, trim: true },
     floor: { type: String, trim: true },
     customFloor: { type: String, trim: true },
+    address: { type: String, trim: true },
+    mapLocation: { type: String, trim: true },
     // Financial details
     rentAmount: { type: String, trim: true },
     advanceAmount: { type: String, trim: true },

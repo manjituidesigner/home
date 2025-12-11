@@ -111,6 +111,8 @@ function createEmptyProperty() {
     rentRoomScope: '', // one room or all rooms
     floor: '',
     customFloor: '',
+    address: '',
+    mapLocation: '',
     // Section 2
     rentAmount: '',
     advanceAmount: '',
@@ -201,7 +203,7 @@ function Chip({ label, selected, onPress }) {
   );
 }
 
-export default function PropertyScreen({ navigation }) {
+export default function PropertyScreen({ navigation, route }) {
   const [properties, setProperties] = useState([createEmptyProperty()]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -603,6 +605,16 @@ export default function PropertyScreen({ navigation }) {
     setMode('add');
   };
 
+  // When coming from PropertyDetailsScreen with a property to edit
+  useEffect(() => {
+    const paramItem = route?.params?.editFromDetails;
+    if (paramItem && paramItem._id) {
+      startEditProperty(paramItem);
+      // clear param so it doesn't re-trigger
+      navigation.setParams({ editFromDetails: null });
+    }
+  }, [route?.params?.editFromDetails]);
+
   const confirmDeleteProperty = (item) => {
     if (!item || !item._id) return;
     setDeleteTarget(item);
@@ -780,6 +792,28 @@ export default function PropertyScreen({ navigation }) {
               placeholderTextColor={theme.colors.textSecondary}
               value={activeProperty.propertyName}
               onChangeText={(text) => updateActiveProperty({ propertyName: text })}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Property Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Full address (street, area, city)"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={activeProperty.address}
+              onChangeText={(text) => updateActiveProperty({ address: text })}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Map Location Link</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Paste Google Maps link (optional)"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={activeProperty.mapLocation}
+              onChangeText={(text) => updateActiveProperty({ mapLocation: text })}
             />
           </View>
 
@@ -1561,6 +1595,8 @@ export default function PropertyScreen({ navigation }) {
                           onPress={() =>
                             navigation.navigate('PropertyDetails', {
                               property: item,
+                              propertyList,
+                              index,
                             })
                           }
                         >

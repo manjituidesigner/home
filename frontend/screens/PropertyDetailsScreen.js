@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   Dimensions,
   Switch,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../theme';
@@ -16,20 +17,32 @@ import theme from '../theme';
 const { width, height } = Dimensions.get('window');
 
 export default function PropertyDetailsScreen({ route, navigation }) {
-  const property = route?.params?.property || {};
+  const passedProperty = route?.params?.property || {};
+  const propertyList = Array.isArray(route?.params?.propertyList)
+    ? route.params.propertyList
+    : null;
+  const initialIndex = typeof route?.params?.index === 'number'
+    ? route.params.index
+    : 0;
+
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const property = useMemo(() => {
+    if (propertyList && propertyList[currentIndex]) {
+      return propertyList[currentIndex];
+    }
+    return passedProperty;
+  }, [propertyList, currentIndex, passedProperty]);
   const [isAvailable, setIsAvailable] = useState(
     property.status !== 'occupied',
   );
   const [openAmenities, setOpenAmenities] = useState(false);
   const [openRules, setOpenRules] = useState(false);
 
-  const coverPhoto =
-    Array.isArray(property.photos) && property.photos.length
-      ? property.photos[0]
-      : null;
+  const photos = Array.isArray(property.photos) ? property.photos : [];
+  const coverPhoto = photos.length ? photos[0] : null;
 
-  const title = property.propertyName || 'Selected Property';
-  const address = property.floor || property.customFloor || '';
+  const title = property.propertyName || 'Property details';
+  const address = property.address || property.floor || property.customFloor || '';
   const typeLabel = property.bhk
     ? `${property.bhk} ${
         property.category === 'house'
@@ -72,10 +85,22 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   const statusTextColor =
     property.status === 'occupied' ? '#c53030' : '#1b8a66';
 
+  const handleOpenMap = () => {
+    const raw = (property.mapLocation || '').trim();
+    if (!raw) return;
+
+    const isUrl = raw.startsWith('http://') || raw.startsWith('https://');
+    const targetUrl = isUrl
+      ? raw
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(raw)}`;
+
+    Linking.openURL(targetUrl).catch(() => {});
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header bar */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.iconBtn}
@@ -83,11 +108,42 @@ export default function PropertyDetailsScreen({ route, navigation }) {
           >
             <Ionicons name="chevron-back" size={22} color="#2b2b2b" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Selected Property</Text>
+          <Text style={styles.headerTitle}>Property details</Text>
           <View style={styles.headerRightIcons}>
+            {propertyList && propertyList.length > 1 && (
+              <>
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() =>
+                    setCurrentIndex((prev) =>
+                      propertyList && prev > 0 ? prev - 1 : prev,
+                    )
+                  }
+                >
+                  <Ionicons name="chevron-back" size={18} color="#2b2b2b" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() =>
+                    setCurrentIndex((prev) =>
+                      propertyList && prev < propertyList.length - 1
+                        ? prev + 1
+                        : prev,
+                    )
+                  }
+                >
+                  <Ionicons name="chevron-forward" size={18} color="#2b2b2b" />
+                </TouchableOpacity>
+              </>
+            )}
             <TouchableOpacity
               style={styles.iconBtn}
-              onPress={() => navigation.navigate('Property')}
+              onPress={() =>
+                navigation.navigate('Main', {
+                  screen: 'Property',
+                  params: { editFromDetails: property },
+                })
+              }
             >
               <Ionicons name="pencil" size={18} color="#2b2b2b" />
             </TouchableOpacity>
@@ -104,7 +160,7 @@ export default function PropertyDetailsScreen({ route, navigation }) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Large image */}
+          {/* Main image */}
           <View style={styles.imageCard}>
             {coverPhoto ? (
               <Image
@@ -145,7 +201,50 @@ export default function PropertyDetailsScreen({ route, navigation }) {
             </View>
           </View>
 
-          {/* Card: Availability and Rent */}
+          {/* Section: Property details */}
+          <View style={styles.smallCard}>
+            <Text style={styles.sectionHeading}>Property Details</Text>
+            <RowLabel label="Name" value={property.propertyName || '-'} />
+            <RowLabel label="Category" value={property.category || '-'} />
+            <RowLabel label="Listing Type" value={property.listingType || '-'} />
+            <RowLabel label="Mode" value={property.mode || '-'} />
+            <RowLabel label="Configuration (BHK)" value={property.bhk || '-'} />
+            <RowLabel label="Furnishing" value={property.furnishing || '-'} />
+            <RowLabel
+              label="Floor"
+              value={property.floor || property.customFloor || '-'}
+            />
+            <RowLabel label="Total Rooms" value={property.totalRooms || '-'} />
+          </View>
+
+          {/* Section: Address & Map */}
+          <View style={styles.smallCard}>
+            <Text style={styles.sectionHeading}>Address & Location</Text>
+            <RowLabel label="Address" value={property.address || '-'} />
+
+            {property.mapLocation ? (
+              <TouchableOpacity style={styles.mapRow} onPress={handleOpenMap}>
+                <View>
+                  <Text style={styles.rowLabelLeft}>Map Location</Text>
+                </View>
+                <View style={styles.mapRowRight}>
+                  <Ionicons
+                    name="map-outline"
+                    size={16}
+                    color={theme.colors.primary}
+                    style={styles.mapIcon}
+                  />
+                  <Text style={styles.mapLinkText} numberOfLines={1}>
+                    Open in Google Maps
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <RowLabel label="Map Location" value="-" />
+            )}
+          </View>
+
+          {/* Section: Rent & Availability */}
           <View style={styles.infoCard}>
             {/* Availability */}
             <View style={styles.infoRow}>
