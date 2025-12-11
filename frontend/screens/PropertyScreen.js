@@ -1478,6 +1478,7 @@ export default function PropertyScreen({ navigation }) {
                 : 'Rent not set';
 
               const statusTextLine = isOpen ? 'Open for rent' : 'Booked';
+              const statusActionLabel = isOpen ? 'Booked' : 'Open';
 
               return (
                 <View
@@ -1534,7 +1535,7 @@ export default function PropertyScreen({ navigation }) {
                           ]}
                         >
                           <Text style={styles.statusText}>
-                            {isOpen ? 'Open' : 'Booked'}
+                            {statusActionLabel}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
