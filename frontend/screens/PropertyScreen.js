@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://home-backend-zc1d.onrender.com';
 
 const PROPERTY_CATEGORIES = [
   { id: 'flat', label: 'Flat / Apartment', icon: 'home-outline' },
@@ -175,14 +175,6 @@ function OptionCard({ label, selected, onPress, icon, compact = false }) {
         >
           {label}
         </Text>
-      </View>
-      <View
-        style={[
-          styles.radioOuter,
-          selected && styles.radioOuterSelected,
-        ]}
-      >
-        {selected ? <View style={styles.radioInner} /> : null}
       </View>
     </TouchableOpacity>
   );
