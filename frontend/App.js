@@ -6,6 +6,7 @@ import LoginScreen from './screens/LoginScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import PropertyScreen from './screens/PropertyScreen';
+import PropertyDetailsScreen from './screens/PropertyDetailsScreen';
 import WishlistScreen from './screens/WishlistScreen';
 import TenentsScreen from './screens/TenentsScreen';
 import PaymentsScreen from './screens/PaymentsScreen';
@@ -44,6 +45,7 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Main" component={MainDrawer} />
+        <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

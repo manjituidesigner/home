@@ -1472,6 +1472,8 @@ export default function PropertyScreen({ navigation }) {
               const statusTextLine = isOpen ? 'Open for rent' : 'Booked';
               const statusActionLabel = isOpen ? 'Booked' : 'Open';
 
+              const addressLine = item.floor || item.customFloor || '';
+
               return (
                 <View
                   key={item._id}
@@ -1480,21 +1482,61 @@ export default function PropertyScreen({ navigation }) {
                     !isOpen && styles.propertyCardClosed,
                   ]}
                 >
+                  {/* Image wrapper */}
                   {coverPhoto ? (
-                    <Image source={{ uri: coverPhoto }} style={styles.propertyCoverImage} />
+                    <View style={styles.propertyImageWrapper}>
+                      <Image
+                        source={{ uri: coverPhoto }}
+                        style={styles.propertyCoverImage}
+                        resizeMode="cover"
+                      />
+                    </View>
                   ) : null}
 
+                  {/* Content */}
                   <View style={styles.propertyCardBody}>
-                    <Text style={styles.propertyStatusText}>{statusTextLine}</Text>
+                    {/* Status row as badge */}
+                    <View style={styles.propertyStatusRow}>
+                      <View style={styles.propertyStatusBadge}>
+                        <Text style={styles.propertyStatusBadgeLabel}>Status:</Text>
+                        <Text style={styles.propertyStatusBadgeText}> {statusTextLine}</Text>
+                      </View>
+                    </View>
 
-                    <Text style={styles.propertyName}>
-                      {item.propertyName || 'Untitled Property'}
+                    {/* Title row with three-dot menu on right */}
+                    <View style={styles.propertyTitleRow}>
+                      <Text style={styles.propertyName} numberOfLines={2}>
+                        {item.propertyName || 'Untitled Property'}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setOpenMenuForId(prev =>
+                            prev === item._id ? null : item._id,
+                          )
+                        }
+                        style={styles.moreButton}
+                      >
+                        <Ionicons
+                          name="ellipsis-vertical"
+                          size={18}
+                          color={theme.colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Address (small) */}
+                    {addressLine ? (
+                      <Text style={styles.propertyAddress} numberOfLines={1}>
+                        {addressLine}
+                      </Text>
+                    ) : null}
+
+                    {/* Subtitle / type */}
+                    <Text style={styles.propertySubtitle} numberOfLines={1}>
+                      {item.bhk || '1BHK'} {typeLabel}
                     </Text>
 
-                    <Text style={styles.propertySubtitle}>
-                      {item.bhk || '1BHK'} {typeLabel} • {rentLabel}
-                    </Text>
-
+                    {/* Amenities / tenant summary */}
                     {amenitiesText ? (
                       <Text style={styles.propertyAmenitiesText} numberOfLines={1}>
                         {amenitiesText}
@@ -1507,42 +1549,22 @@ export default function PropertyScreen({ navigation }) {
                       </Text>
                     ) : null}
 
+                    {/* Bottom row: price + buttons */}
                     <View style={styles.propertyFooterRow}>
-                      <TouchableOpacity
-                        style={styles.viewDetailsButton}
-                        onPress={() => startEditProperty(item)}
-                        disabled={isOccupied}
-                      >
-                        <Text style={styles.viewDetailsLabel}>View Details</Text>
-                      </TouchableOpacity>
+                      <View>
+                        <Text style={styles.propertyPrice}>{rentLabel}</Text>
+                      </View>
 
-                      <View style={styles.cardActionsColumn}>
+                      <View style={styles.propertyFooterActions}>
                         <TouchableOpacity
-                          onPress={() => togglePropertyStatus(item, derivedStatus)}
-                          style={[
-                            styles.statusPill,
-                            isOpen
-                              ? styles.statusAvailable
-                              : styles.statusOccupied,
-                          ]}
-                        >
-                          <Text style={styles.statusText}>
-                            {statusActionLabel}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                          style={styles.viewDetailsButton}
                           onPress={() =>
-                            setOpenMenuForId(prev =>
-                              prev === item._id ? null : item._id,
-                            )
+                            navigation.navigate('PropertyDetails', {
+                              property: item,
+                            })
                           }
-                          style={styles.moreButton}
                         >
-                          <Ionicons
-                            name="ellipsis-vertical"
-                            size={18}
-                            color={theme.colors.textSecondary}
-                          />
+                          <Text style={styles.viewDetailsLabel}>View Details</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1948,31 +1970,65 @@ const styles = StyleSheet.create({
   },
   propertyCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
+    borderRadius: 12,
     overflow: 'hidden',
     marginBottom: theme.spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   propertyCardClosed: {
     opacity: 0.5,
   },
+  propertyImageWrapper: {
+    width: '100%',
+    height: 170,
+    backgroundColor: '#e6eef8',
+  },
   propertyCoverImage: {
     width: '100%',
-    height: 160,
-    resizeMode: 'cover',
+    height: '100%',
   },
   propertyCardBody: {
     padding: theme.spacing.md,
   },
-  propertyStatusText: {
-    fontSize: 14,
+  propertyStatusRow: {
+    marginBottom: 6,
+  },
+  propertyStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eaf6f1',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+  },
+  propertyStatusBadgeLabel: {
+    fontSize: 12,
     fontWeight: '600',
-    color: theme.colors.textSecondary,
-    marginBottom: 4,
+    color: '#1b8a66',
+  },
+  propertyStatusBadgeText: {
+    fontSize: 12,
+    color: '#1b8a66',
   },
   propertyName: {
     fontSize: 18,
     fontWeight: '700',
     color: theme.colors.text,
+    marginBottom: 4,
+  },
+  propertyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  propertyAddress: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
     marginBottom: 4,
   },
   propertySubtitle: {
@@ -1999,17 +2055,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: theme.spacing.md,
   },
+  propertyPrice: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  propertyFooterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   viewDetailsButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 10,
+    backgroundColor: '#007bff',
+    borderRadius: 8,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: theme.spacing.sm,
   },
   viewDetailsLabel: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#fff',
   },
   cardActionsColumn: {
     alignItems: 'flex-end',
