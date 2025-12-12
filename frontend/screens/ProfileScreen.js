@@ -17,12 +17,22 @@ import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 
 const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
+const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
+const API_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
 
 export default function ProfileScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(true);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
+  const [lockedProfile, setLockedProfile] = useState({
+    fullName: '',
+    email: '',
+    mobile: '',
+    username: '',
+    profileImageUrl: '',
+  });
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -60,7 +70,65 @@ export default function ProfileScreen({ navigation }) {
     setIsProfileComplete(!!isComplete);
   }, [formData]);
 
+  const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  useEffect(() => {
+    const loadFromBackend = async () => {
+      try {
+        const authHeaders = await getAuthHeaders();
+        if (!authHeaders.Authorization) return;
+
+        const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders,
+          },
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.user) return;
+
+        const user = data.user;
+
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+        const email = user.email || '';
+        const mobile = user.phone || '';
+        const username = user.username || '';
+        const profileImageUrl = user.profileImageUrl || '';
+
+        setLockedProfile({ fullName, email, mobile, username, profileImageUrl });
+        if (profileImageUrl) setProfileImage(profileImageUrl);
+
+        setFormData((prev) => ({
+          ...prev,
+          fullName,
+          email,
+          mobile,
+          dob: user.dob || prev.dob,
+          currentAddress: {
+            ...prev.currentAddress,
+            ...(user.currentAddress || {}),
+          },
+          permanentAddress: {
+            ...prev.permanentAddress,
+            ...(user.permanentAddress || {}),
+          },
+        }));
+
+        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(user));
+      } catch (e) {
+        // ignore load errors
+      }
+    };
+
+    loadFromBackend();
+  }, []);
+
   const pickImage = async () => {
+    if (lockedProfile.profileImageUrl) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
@@ -83,6 +151,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const takePhoto = async () => {
+    if (lockedProfile.profileImageUrl) return;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
@@ -111,6 +180,10 @@ export default function ProfileScreen({ navigation }) {
   ) => {
     if (!isEditing) return; // Prevent changes when not in edit mode
 
+    if (!isAddress && (field === 'fullName' || field === 'email' || field === 'mobile' || field === 'username')) {
+      return;
+    }
+
     if (isAddress) {
       setFormData(prev => {
         const newData = {
@@ -137,31 +210,45 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleSave = async () => {
-    Alert.alert('Success', 'Profile saved successfully!');
-    setIsEditing(false);
     try {
-      const payload = {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          dob: formData.dob,
+          currentAddress: formData.currentAddress,
+          permanentAddress: sameAsCurrent ? formData.currentAddress : formData.permanentAddress,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        Alert.alert('Error', data?.message || 'Failed to save profile.');
+        return;
+      }
+
+      setIsEditing(false);
+      Alert.alert('Success', 'Profile saved successfully!');
+
+      await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({
         ...formData,
         profileImage,
-      };
-      await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(payload));
+      }));
+
+      if (data?.user) {
+        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(data.user));
+      }
     } catch (e) {
-      // ignore persistence errors for now
+      Alert.alert('Error', 'Unable to save profile.');
     }
   };
 
   const handleUpdate = async () => {
-    Alert.alert('Success', 'Profile updated successfully!');
-    setIsEditing(false);
-    try {
-      const payload = {
-        ...formData,
-        profileImage,
-      };
-      await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(payload));
-    } catch (e) {
-      // ignore persistence errors for now
-    }
+    await handleSave();
   };
 
   const renderAddressFields = (type) => {
@@ -486,7 +573,7 @@ export default function ProfileScreen({ navigation }) {
                   placeholder="Full Name"
                   value={formData.fullName}
                   onChangeText={text => handleInputChange('fullName', text)}
-                  editable={isEditing}
+                  editable={false}
                   placeholderTextColor="#9ca3af"
                 />
               </View>
@@ -505,7 +592,7 @@ export default function ProfileScreen({ navigation }) {
                   onChangeText={text => handleInputChange('email', text)}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  editable={isEditing}
+                  editable={false}
                   placeholderTextColor="#9ca3af"
                 />
               </View>
@@ -523,7 +610,23 @@ export default function ProfileScreen({ navigation }) {
                   value={formData.mobile}
                   onChangeText={text => handleInputChange('mobile', text)}
                   keyboardType="phone-pad"
-                  editable={isEditing}
+                  editable={false}
+                  placeholderTextColor="#9ca3af"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Ionicons
+                  name="at-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  value={lockedProfile.username}
+                  editable={false}
                   placeholderTextColor="#9ca3af"
                 />
               </View>

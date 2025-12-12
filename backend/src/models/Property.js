@@ -14,6 +14,7 @@ const RoomSchema = new mongoose.Schema(
 
 const PropertySchema = new mongoose.Schema(
   {
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     propertyName: { type: String, trim: true, required: true },
     category: { type: String, enum: ['flat', 'house', 'pg', 'commercial'], default: 'flat' },
     listingType: { type: String, enum: ['rent', 'sell', 'pg'], default: 'rent' },

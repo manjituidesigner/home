@@ -1,28 +1,28 @@
 const Property = require('../models/Property');
 
-async function createProperty(payload) {
-  const property = new Property(payload);
+async function createProperty(ownerId, payload) {
+  const property = new Property({ ...payload, ownerId });
   return property.save();
 }
 
-async function updateProperty(id, payload) {
-  const updated = await Property.findByIdAndUpdate(id, payload, {
+async function updateProperty(ownerId, id, payload) {
+  const updated = await Property.findOneAndUpdate({ _id: id, ownerId }, payload, {
     new: true,
     runValidators: true,
   });
   return updated;
 }
 
-async function getPropertyById(id) {
-  return Property.findById(id);
+async function getPropertyById(ownerId, id) {
+  return Property.findOne({ _id: id, ownerId });
 }
 
-async function listProperties() {
-  return Property.find().sort({ createdAt: -1 });
+async function listProperties(ownerId) {
+  return Property.find({ ownerId }).sort({ createdAt: -1 });
 }
 
-async function deleteProperty(id) {
-  return Property.findByIdAndDelete(id);
+async function deleteProperty(ownerId, id) {
+  return Property.findOneAndDelete({ _id: id, ownerId });
 }
 
 module.exports = {

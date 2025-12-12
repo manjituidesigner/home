@@ -14,10 +14,12 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 
-const API_BASE_URL = 'https://home-backend-zc1d.onrender.com';
+const API_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 
 const PROPERTY_CATEGORIES = [
   { id: 'flat', label: 'Flat / Apartment', icon: 'home-outline' },
@@ -219,6 +221,11 @@ export default function PropertyScreen({ navigation, route }) {
 
   const activeProperty = properties[activeIndex];
 
+  const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const updateActiveProperty = (patch) => {
     setProperties((prev) => {
       const next = [...prev];
@@ -232,10 +239,12 @@ export default function PropertyScreen({ navigation, route }) {
     const effectiveStatus = currentStatus || item.status || 'available';
     const nextStatus = effectiveStatus === 'available' ? 'occupied' : 'available';
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/api/properties/${item._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify({ status: nextStatus }),
       });
@@ -511,7 +520,12 @@ export default function PropertyScreen({ navigation, route }) {
   const fetchPropertyList = async () => {
     try {
       setLoadingList(true);
-      const response = await fetch(`${API_BASE_URL}/api/properties`);
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/properties`, {
+        headers: {
+          ...authHeaders,
+        },
+      });
       if (!response.ok) {
         return;
       }
@@ -548,6 +562,7 @@ export default function PropertyScreen({ navigation, route }) {
         method,
         headers: {
           'Content-Type': 'application/json',
+          ...(await getAuthHeaders()),
         },
         body: JSON.stringify(activeProperty),
       });
@@ -629,7 +644,7 @@ export default function PropertyScreen({ navigation, route }) {
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/properties/${deleteTarget._id}`,
-        { method: 'DELETE' },
+        { method: 'DELETE', headers: { ...(await getAuthHeaders()) } },
       );
       if (!response.ok) {
         setShowDeleteModal(false);
@@ -691,7 +706,7 @@ export default function PropertyScreen({ navigation, route }) {
               setCurrentStep(1);
             }}
           >
-            <Ionicons name="chevron-back" size={18} color="#ffffff" />
+            <Ionicons name="chevron-back" size={20} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -714,30 +729,34 @@ export default function PropertyScreen({ navigation, route }) {
         }
       }}
     >
-      {mode === 'add' ? (
-        <>
-          {/* Top step progress */}
-          <View style={styles.stepHeader}>
-            <Text style={styles.stepLabel}>{`Step ${currentStep} of 4`}</Text>
-            <View style={styles.stepBarBackground}>
-              <View
-                style={[
-                  styles.stepBarFill,
-                  { width: `${(currentStep / 4) * 100}%` },
-                ]}
-              />
+      <View style={styles.fullBleed}>
+        {mode === 'add' ? (
+          <>
+            {/* Top step progress */}
+            <View style={styles.stepHeader}>
+              <Text style={styles.stepLabel}>{`Step ${currentStep} of 4`}</Text>
+              <View style={styles.stepBarBackground}>
+                <View
+                  style={[
+                    styles.stepBarFill,
+                    { width: `${(currentStep / 4) * 100}%` },
+                  ]}
+                />
+              </View>
             </View>
-          </View>
 
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
           {/* Step 1: Basic details */}
           {currentStep === 1 && (
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Property Details</Text>
+              <View style={styles.sectionTitle}>
+                <View style={styles.sectionTitleAccent} />
+                <Text style={styles.sectionTitleText}>Property Details</Text>
+              </View>
 
           <View style={styles.photoSection}>
             <Text style={styles.subSectionTitle}>Upload Images (max 5)</Text>
@@ -1015,7 +1034,10 @@ export default function PropertyScreen({ navigation, route }) {
         {/* Step 2: Financial details */}
         {currentStep === 2 && (
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Rent & Charges</Text>
+          <View style={styles.sectionTitle}>
+            <View style={styles.sectionTitleAccent} />
+            <Text style={styles.sectionTitleText}>Rent & Charges</Text>
+          </View>
 
           <View style={styles.fieldGroupRow}>
             <View style={[styles.fieldGroup, styles.flex1, styles.mr8]}>
@@ -1167,7 +1189,10 @@ export default function PropertyScreen({ navigation, route }) {
         {/* Step 3: Amenities */}
         {currentStep === 3 && (
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Amenities Provided</Text>
+          <View style={styles.sectionTitle}>
+            <View style={styles.sectionTitleAccent} />
+            <Text style={styles.sectionTitleText}>Amenities Provided</Text>
+          </View>
           <View style={styles.chipRowWrap}>
             {AMENITIES.map((a) => (
               <Chip
@@ -1217,7 +1242,10 @@ export default function PropertyScreen({ navigation, route }) {
         {/* Step 4: Tenant rules & preferences */}
         {currentStep === 4 && (
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Tenant Rules & Preferences</Text>
+          <View style={styles.sectionTitle}>
+            <View style={styles.sectionTitleAccent} />
+            <Text style={styles.sectionTitleText}>Tenant Rules & Preferences</Text>
+          </View>
           <Text style={styles.summaryText}>{buildTenantSummary()}</Text>
 
           {/* Lifestyle / behaviour */}
@@ -1685,12 +1713,18 @@ export default function PropertyScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+      </View>
     </ScreenLayout>
   );
 
 }
 
 const styles = StyleSheet.create({
+  fullBleed: {
+    flex: 1,
+    marginHorizontal: -theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+  },
   headerAddButton: {
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -1705,91 +1739,97 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerIconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.primaryDark,
+    padding: 6,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
   scroll: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
-    paddingBottom: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   stepHeader: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.xs,
+    marginBottom: theme.spacing.lg,
   },
   stepLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.primary,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 4,
   },
   stepBarBackground: {
-    marginTop: 6,
     width: '100%',
-    height: 8,
+    height: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(79,63,237,0.18)',
+    backgroundColor: theme.colors.border,
     overflow: 'hidden',
   },
   stepBarFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: theme.colors.primaryDark,
+    backgroundColor: theme.colors.primary,
   },
   // Step sections: full-width, no card background
   sectionCard: {
-    marginHorizontal: theme.spacing.md,
     marginBottom: theme.spacing.lg,
   },
   // Large section heading with light underline
   sectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  sectionTitleAccent: {
+    width: 4,
+    height: 24,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    marginRight: 10,
+  },
+  sectionTitleText: {
     fontSize: 24,
     fontWeight: '700',
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.sm,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148,163,184,0.35)',
+    color: theme.colors.text,
   },
   photoSection: {
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
   photoGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginTop: theme.spacing.sm,
-    gap: 10,
+    justifyContent: 'space-between',
   },
   photoAddTile: {
-    width: 96,
-    height: 96,
-    borderRadius: 18,
-    borderWidth: 1,
+    width: '32%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#D1D5DB',
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F1F5F9',
   },
   photoAddTileLabel: {
-    marginTop: 4,
+    marginTop: 2,
     fontSize: 12,
     fontWeight: '500',
-    color: theme.colors.accent,
+    color: theme.colors.primary,
   },
   photoThumbWrapper: {
-    width: 96,
-    height: 96,
-    borderRadius: 18,
+    width: '32%',
+    aspectRatio: 1,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F1F5F9',
     position: 'relative',
+    marginBottom: 10,
   },
   photoThumb: {
     width: '100%',
@@ -1828,22 +1868,22 @@ const styles = StyleSheet.create({
   },
   fieldGroupRow: {
     flexDirection: 'row',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: '#E2E8F0',
     borderRadius: 10,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
-    fontSize: 14,
-    backgroundColor: '#f9fafb',
+    paddingVertical: 12,
+    fontSize: 15,
+    backgroundColor: '#F1F5F9',
     color: theme.colors.text,
   },
   optionsGrid: {
@@ -1923,22 +1963,22 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   chip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 999,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#ffffff',
-    marginRight: theme.spacing.xs,
-    marginBottom: theme.spacing.xs,
+    borderColor: '#E2E8F0',
+    marginRight: 8,
+    marginBottom: 8,
   },
   chipSelected: {
     backgroundColor: theme.colors.primary,
     borderColor: theme.colors.primary,
   },
   chipLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: theme.colors.text,
   },
   chipLabelSelected: {
@@ -1953,23 +1993,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.text,
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
   },
   roomSection: {
     marginTop: theme.spacing.md,
   },
   roomCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: '#ffffff',
-    padding: theme.spacing.md,
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    padding: 0,
     marginBottom: theme.spacing.md,
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: 'transparent',
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   roomTitle: {
     fontSize: 15,
@@ -2164,8 +2202,8 @@ const styles = StyleSheet.create({
   stepBottomBar: {
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
     backgroundColor: '#ffffff',
   },
   stepBottomRow: {
@@ -2174,31 +2212,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   stepSecondaryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: theme.spacing.lg,
+    flex: 1,
+    paddingVertical: 12,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    marginRight: 16,
   },
   stepSecondaryLabel: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: theme.colors.text,
   },
   stepSecondarySpacer: {
-    width: 120,
+    flex: 1,
+    marginRight: 16,
   },
   stepPrimaryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: theme.spacing.lg,
+    flex: 1,
+    paddingVertical: 12,
     borderRadius: 999,
-    backgroundColor: theme.colors.primaryDark,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepPrimaryLabel: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
   },

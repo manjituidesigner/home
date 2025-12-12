@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const cloudinary = require('../config/cloudinary');
 const propertyService = require('../services/propertyService');
+const auth = require('../middleware/auth');
 
 // Upload single property image to Cloudinary.
 // Expects JSON body: { dataUrl: 'data:image/jpeg;base64,...' }
@@ -34,9 +35,9 @@ router.post('/upload-image', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => {
   try {
-    const property = await propertyService.createProperty(req.body);
+    const property = await propertyService.createProperty(req.user.userId, req.body);
     res.status(201).json(property);
   } catch (err) {
     console.error('Error creating property', err);
@@ -44,9 +45,9 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const properties = await propertyService.listProperties();
+    const properties = await propertyService.listProperties(req.user.userId);
     res.json(properties);
   } catch (err) {
     console.error('Error listing properties', err);
@@ -54,9 +55,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
-    const property = await propertyService.getPropertyById(req.params.id);
+    const property = await propertyService.getPropertyById(req.user.userId, req.params.id);
     if (!property) {
       return res.status(404).json({ message: 'Property not found' });
     }
@@ -67,9 +68,9 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
-    const updated = await propertyService.updateProperty(req.params.id, req.body);
+    const updated = await propertyService.updateProperty(req.user.userId, req.params.id, req.body);
     if (!updated) {
       return res.status(404).json({ message: 'Property not found' });
     }
@@ -80,9 +81,9 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
-    const deleted = await propertyService.deleteProperty(req.params.id);
+    const deleted = await propertyService.deleteProperty(req.user.userId, req.params.id);
     if (!deleted) {
       return res.status(404).json({ message: 'Property not found' });
     }

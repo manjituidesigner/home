@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Alert, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Alert, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
 
-const DEMO_USERNAME = 'Admin';
-const DEMO_PASSWORD = '123';
+const API_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
+const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
 const LOGIN_STORAGE_KEY = 'LOGIN_REMEMBER_CREDENTIALS';
 
 export default function LoginScreen({ navigation }) {
@@ -34,8 +35,28 @@ export default function LoginScreen({ navigation }) {
     loadSavedCredentials();
   }, []);
 
-  const handleLogin = () => {
-    if (username === DEMO_USERNAME && password === DEMO_PASSWORD) {
+  const handleLogin = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert('Login failed', data?.message || 'Invalid username or password');
+        return;
+      }
+
+      if (data?.token) {
+        await AsyncStorage.setItem(AUTH_TOKEN_STORAGE_KEY, String(data.token));
+      }
+
+      if (data?.user) {
+        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(data.user));
+      }
+
       if (rememberMe) {
         AsyncStorage.setItem(
           LOGIN_STORAGE_KEY,
@@ -44,9 +65,10 @@ export default function LoginScreen({ navigation }) {
       } else {
         AsyncStorage.removeItem(LOGIN_STORAGE_KEY).catch(() => {});
       }
+
       navigation.replace('Main');
-    } else {
-      Alert.alert('Login failed', 'Invalid username or password');
+    } catch (e) {
+      Alert.alert('Login failed', 'Unable to connect to server.');
     }
   };
 
@@ -56,7 +78,7 @@ export default function LoginScreen({ navigation }) {
         <View style={styles.heroBlock}>
           <Text style={styles.heroTitle}>Welcome Back </Text>
           <Text style={styles.heroSubtitle}>
-            Sign in with the demo credentials to continue.
+            Sign in with your account to continue.
           </Text>
         </View>
 
@@ -104,7 +126,7 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <Text style={styles.hint}>
-            Demo credentials: username "Admin" and password "123".
+            Use your registered username and password.
           </Text>
         </View>
       </View>

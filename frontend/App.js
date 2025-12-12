@@ -2,7 +2,11 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
+import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
+import CreateAccountScreen from './screens/CreateAccountScreen';
+import VerifyOtpScreen from './screens/VerifyOtpScreen';
+import WelcomeScreen from './screens/WelcomeScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import PropertyScreen from './screens/PropertyScreen';
@@ -42,8 +46,12 @@ function MainDrawer() {
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
+        <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
+        <Stack.Screen name="VerifyOtp" component={VerifyOtpScreen} />
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Main" component={MainDrawer} />
         <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
       </Stack.Navigator>
