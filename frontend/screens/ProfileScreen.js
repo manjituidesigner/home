@@ -19,7 +19,10 @@ import theme from '../theme';
 const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
-const API_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
+const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
+const RENDER_BASE_URL = 'https://home-backend-zc1d.onrender.com';
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
 
 export default function ProfileScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(true);
