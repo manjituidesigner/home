@@ -87,10 +87,10 @@ export default function LoginScreen({ navigation }) {
 
         <View style={styles.formBlock}>
           <View style={styles.fieldBlock}>
-            <Text style={styles.fieldLabel}>Username</Text>
+            <Text style={styles.fieldLabel}>Username or Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter username"
+              placeholder="Enter username or email"
               autoCapitalize="none"
               value={username}
               onChangeText={setUsername}
@@ -127,6 +127,14 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.buttonBlock}>
             <PrimaryButton title="Login" onPress={handleLogin} />
           </View>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ForgotPassword')}
+            activeOpacity={0.8}
+            style={styles.forgotLink}
+          >
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
 
           <Text style={styles.hint}>
             Use your registered username and password.
@@ -217,5 +225,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textSecondary,
     textAlign: 'center',
+  },
+  forgotLink: {
+    marginTop: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  forgotText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
 });

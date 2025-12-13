@@ -55,23 +55,46 @@ export default function VerifyOtpScreen({ navigation, route }) {
       Alert.alert('OTP', 'Please enter the 4-digit code.');
       return;
     }
+    const mode = route?.params?.mode;
     const otpId = route?.params?.otpId;
-    if (!otpId) {
-      Alert.alert('OTP', 'Missing OTP session. Please register again.');
-      return;
+    const resetOtpId = route?.params?.resetOtpId;
+    if (mode === 'reset_password') {
+      if (!resetOtpId) {
+        Alert.alert('OTP', 'Missing OTP session. Please try again.');
+        return;
+      }
+    } else {
+      if (!otpId) {
+        Alert.alert('OTP', 'Missing OTP session. Please register again.');
+        return;
+      }
     }
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+        const url =
+          mode === 'reset_password'
+            ? `${API_BASE_URL}/api/auth/verify-reset-otp`
+            : `${API_BASE_URL}/api/auth/verify-otp`;
+        const body =
+          mode === 'reset_password'
+            ? { resetOtpId, code }
+            : { otpId, code };
+
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ otpId, code }),
+          body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           Alert.alert('OTP', data?.message || 'Invalid OTP');
+          return;
+        }
+
+        if (mode === 'reset_password') {
+          navigation.replace('ResetPassword', { resetToken: data?.resetToken });
           return;
         }
 

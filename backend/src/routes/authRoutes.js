@@ -6,6 +6,7 @@ const crypto = require('crypto');
 
 const User = require('../models/User');
 const Otp = require('../models/Otp');
+const PasswordResetOtp = require('../models/PasswordResetOtp');
 const cloudinary = require('../config/cloudinary');
 const auth = require('../middleware/auth');
 
@@ -24,11 +25,41 @@ function verifyPassword(password, salt, expectedHash) {
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(String(expectedHash), 'hex'));
 }
 
+function looksLikeEmail(value) {
+  const v = String(value || '').trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function splitFullName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
 router.post('/register', async (req, res) => {
   try {
-    const { firstName, lastName, phone, username, email, role, password, profileImageDataUrl } = req.body || {};
+    const {
+      firstName,
+      lastName,
+      fullName,
+      phone,
+      username,
+      email,
+      identifier,
+      role,
+      password,
+      profileImageDataUrl,
+    } = req.body || {};
 
-    if (!firstName || !lastName || !phone || !username || !password) {
+    const nameFromFull = fullName ? splitFullName(fullName) : null;
+    const resolvedFirstName = String((firstName || nameFromFull?.firstName || '')).trim();
+    const resolvedLastName = String((lastName || nameFromFull?.lastName || '')).trim();
+
+    const resolvedIdentifier = String(username || identifier || '').trim();
+    const resolvedEmail = email ? String(email).trim() : (looksLikeEmail(resolvedIdentifier) ? resolvedIdentifier : undefined);
+
+    if (!resolvedFirstName || !phone || !resolvedIdentifier || !password) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
@@ -39,9 +70,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Phone already registered' });
     }
 
-    const existingUsername = await User.findOne({ username: String(username).trim() });
+    const existingUsername = await User.findOne({ username: resolvedIdentifier });
     if (existingUsername) {
       return res.status(400).json({ message: 'Username already taken' });
+    }
+
+    if (resolvedEmail) {
+      const existingEmail = await User.findOne({ email: resolvedEmail });
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
     }
 
     const { salt, hash } = hashPassword(password);
@@ -50,11 +88,11 @@ router.post('/register', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     const otpDoc = await Otp.create({
-      firstName: String(firstName).trim(),
-      lastName: String(lastName).trim(),
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
       phone: normalizedPhone,
-      username: String(username).trim(),
-      email: email ? String(email).trim() : undefined,
+      username: resolvedIdentifier,
+      email: resolvedEmail,
       role: role ? String(role).trim() : undefined,
       passwordHash: hash,
       passwordSalt: salt,
@@ -150,12 +188,15 @@ router.post('/verify-otp', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body || {};
-    if (!username || !password) {
+    const { username, identifier, password } = req.body || {};
+    const resolvedIdentifier = String(username || identifier || '').trim();
+    if (!resolvedIdentifier || !password) {
       return res.status(400).json({ message: 'Missing username or password' });
     }
 
-    const user = await User.findOne({ username: String(username).trim() });
+    const user = await User.findOne({
+      $or: [{ username: resolvedIdentifier }, { email: resolvedIdentifier }],
+    });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -184,6 +225,131 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('Error in /api/auth/login', err);
     return res.status(500).json({ message: 'Failed to login' });
+  }
+});
+
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { identifier, username, phone } = req.body || {};
+    const resolvedIdentifier = String(identifier || username || '').trim();
+    const normalizedPhone = String(phone || '').trim();
+
+    if (!resolvedIdentifier || !normalizedPhone) {
+      return res.status(400).json({ message: 'Missing identifier or phone' });
+    }
+
+    const user = await User.findOne({
+      phone: normalizedPhone,
+      $or: [{ username: resolvedIdentifier }, { email: resolvedIdentifier }],
+    });
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    const code = generate4DigitOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    const otpDoc = await PasswordResetOtp.create({
+      userId: user._id,
+      code,
+      expiresAt,
+      used: false,
+    });
+
+    return res.status(201).json({
+      success: true,
+      resetOtpId: otpDoc._id,
+      otp: code,
+      expiresAt,
+    });
+  } catch (err) {
+    console.error('Error in /api/auth/forgot-password', err);
+    return res.status(500).json({ message: 'Failed to request password reset' });
+  }
+});
+
+router.post('/verify-reset-otp', async (req, res) => {
+  try {
+    const { resetOtpId, code } = req.body || {};
+    if (!resetOtpId || !code) {
+      return res.status(400).json({ message: 'Missing resetOtpId or code' });
+    }
+
+    const otpDoc = await PasswordResetOtp.findById(resetOtpId);
+    if (!otpDoc) {
+      return res.status(404).json({ message: 'OTP not found' });
+    }
+
+    if (otpDoc.used) {
+      return res.status(400).json({ message: 'OTP already used' });
+    }
+
+    if (otpDoc.expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ message: 'OTP expired' });
+    }
+
+    if (String(otpDoc.code) !== String(code)) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    otpDoc.used = true;
+    await otpDoc.save();
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      return res.status(500).json({ message: 'JWT secret not configured' });
+    }
+
+    const resetToken = jwt.sign(
+      { userId: otpDoc.userId, type: 'password_reset' },
+      secret,
+      { expiresIn: '15m' }
+    );
+
+    return res.json({ success: true, resetToken });
+  } catch (err) {
+    console.error('Error in /api/auth/verify-reset-otp', err);
+    return res.status(500).json({ message: 'Failed to verify OTP' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body || {};
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ message: 'Missing reset token or new password' });
+    }
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      return res.status(500).json({ message: 'JWT secret not configured' });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(String(resetToken), secret);
+    } catch (e) {
+      return res.status(401).json({ message: 'Invalid or expired reset token' });
+    }
+
+    if (payload?.type !== 'password_reset' || !payload?.userId) {
+      return res.status(401).json({ message: 'Invalid or expired reset token' });
+    }
+
+    const user = await User.findById(payload.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const { salt, hash } = hashPassword(newPassword);
+    user.passwordSalt = salt;
+    user.passwordHash = hash;
+    await user.save();
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Error in /api/auth/reset-password', err);
+    return res.status(500).json({ message: 'Failed to reset password' });
   }
 });
 

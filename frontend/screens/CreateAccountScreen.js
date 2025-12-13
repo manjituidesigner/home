@@ -8,10 +8,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Image,
   Platform,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import theme from '../theme';
 
 const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
@@ -21,32 +19,21 @@ const API_BASE_URL =
 
 export default function CreateAccountScreen({ navigation }) {
   const [role, setRole] = useState('Owner');
-  const [profileImageUri, setProfileImageUri] = useState('');
-  const [profileImageDataUrl, setProfileImageDataUrl] = useState('');
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleCreate = async () => {
     const missing = [];
-    if (!(firstName || '').trim()) missing.push('First name');
-    if (!(lastName || '').trim()) missing.push('Last name');
+    if (!(fullName || '').trim()) missing.push('Full name');
     if (!(phone || '').trim()) missing.push('Phone number');
-    if (!(username || '').trim()) missing.push('Username');
+    if (!(identifier || '').trim()) missing.push('Username or email');
     if (!(password || '').trim()) missing.push('Password');
 
     if (missing.length) {
       Alert.alert('Validation', 'Please fill the details.');
-      return;
-    }
-
-    if (String(password) !== String(confirmPassword)) {
-      Alert.alert('Validation', 'Password and confirm password do not match.');
       return;
     }
 
@@ -55,14 +42,11 @@ export default function CreateAccountScreen({ navigation }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName,
-          lastName,
+          fullName,
           phone,
-          username,
-          email,
+          identifier,
           role,
           password,
-          profileImageDataUrl: profileImageDataUrl || undefined,
         }),
       });
 
@@ -73,56 +57,13 @@ export default function CreateAccountScreen({ navigation }) {
       }
 
       navigation.navigate('VerifyOtp', {
-        target: email && email.trim() ? 'your email address' : 'your phone number',
+        target: 'your phone number',
         otp: data?.otp,
         otpId: data?.otpId,
         phone,
       });
     } catch (e) {
       Alert.alert('Register', 'Unable to connect to server.');
-    }
-  };
-
-  const handlePickProfileImage = async () => {
-    try {
-      if (Platform.OS === 'web') {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = () => {
-          const file = input.files && input.files[0];
-          if (!file) return;
-          const url = URL.createObjectURL(file);
-          setProfileImageUri(url);
-          setProfileImageDataUrl('');
-        };
-        input.click();
-        return;
-      }
-
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow camera access.');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (result.canceled || !result.assets || !result.assets.length) return;
-      setProfileImageUri(result.assets[0].uri);
-      if (result.assets[0].base64) {
-        setProfileImageDataUrl(`data:image/jpeg;base64,${result.assets[0].base64}`);
-      } else {
-        setProfileImageDataUrl('');
-      }
-    } catch (e) {
-      Alert.alert('Profile picture', 'Unable to pick image.');
     }
   };
 
@@ -167,44 +108,13 @@ export default function CreateAccountScreen({ navigation }) {
           })}
         </View>
 
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarGroup}>
-            <View style={styles.avatarCircle}>
-              {profileImageUri ? (
-                <Image source={{ uri: profileImageUri }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarPlaceholder}>👤</Text>
-              )}
-            </View>
-            <TouchableOpacity
-              style={styles.avatarCameraButton}
-              onPress={handlePickProfileImage}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.avatarCameraIcon}>📷</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.avatarHint}>Add a profile picture</Text>
-        </View>
-
         <View style={styles.form}>
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>First Name</Text>
+            <Text style={styles.fieldLabel}>Full Name</Text>
             <TextInput
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder="Ex. Sarah"
-              placeholderTextColor={stylesVars.placeholderColor}
-              style={styles.formInput}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Last Name</Text>
-            <TextInput
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder="Ex. Connor"
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="Ex. Sarah Connor"
               placeholderTextColor={stylesVars.placeholderColor}
               style={styles.formInput}
             />
@@ -223,29 +133,13 @@ export default function CreateAccountScreen({ navigation }) {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Username</Text>
+            <Text style={styles.fieldLabel}>Username or Email</Text>
             <TextInput
-              value={username}
-              onChangeText={setUsername}
-              placeholder="@sarahc"
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="@sarahc or sarah@example.com"
               placeholderTextColor={stylesVars.placeholderColor}
               style={styles.formInput}
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={styles.field}>
-            <View style={styles.fieldLabelRow}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <Text style={styles.fieldLabelOptional}>(Optional)</Text>
-            </View>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="sarah@example.com"
-              placeholderTextColor={stylesVars.placeholderColor}
-              style={styles.formInput}
-              keyboardType="email-address"
               autoCapitalize="none"
             />
           </View>
@@ -262,17 +156,6 @@ export default function CreateAccountScreen({ navigation }) {
             />
           </View>
 
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Confirm Password</Text>
-            <TextInput
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Confirm password"
-              placeholderTextColor={stylesVars.placeholderColor}
-              style={styles.formInput}
-              secureTextEntry
-            />
-          </View>
         </View>
 
         <View style={styles.footer}>
