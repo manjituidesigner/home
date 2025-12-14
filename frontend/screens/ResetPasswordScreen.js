@@ -53,8 +53,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
         return;
       }
 
-      Alert.alert('Success', 'Password updated successfully. Please login.');
-      navigation.replace('Login');
+      navigation.replace('PasswordChangedSuccess');
     } catch (e) {
       Alert.alert('Reset Password', 'Unable to connect to server.');
     } finally {

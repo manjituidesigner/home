@@ -18,13 +18,11 @@ const API_BASE_URL =
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [identifier, setIdentifier] = useState('');
-  const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSendOtp = async () => {
     const missing = [];
     if (!(identifier || '').trim()) missing.push('Username or email');
-    if (!(phone || '').trim()) missing.push('Phone number');
 
     if (missing.length) {
       Alert.alert('Validation', 'Please fill the details.');
@@ -36,7 +34,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, phone }),
+        body: JSON.stringify({ identifier }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -47,7 +45,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
       navigation.navigate('VerifyOtp', {
         mode: 'reset_password',
-        target: 'your phone number',
+        target: data?.target || 'your phone number',
         otp: data?.otp,
         resetOtpId: data?.resetOtpId,
       });
@@ -74,7 +72,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.title}>Forgot Password</Text>
           <Text style={styles.subtitle}>
-            Enter your username/email and phone number. We will send an OTP.
+            Enter your username/email. We will send an OTP.
           </Text>
 
           <View style={styles.field}>
@@ -85,18 +83,6 @@ export default function ForgotPasswordScreen({ navigation }) {
               onChangeText={setIdentifier}
               autoCapitalize="none"
               placeholder="@username or email"
-              placeholderTextColor={stylesVars.placeholderColor}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              placeholder="Your registered phone"
               placeholderTextColor={stylesVars.placeholderColor}
             />
           </View>

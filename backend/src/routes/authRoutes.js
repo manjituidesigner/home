@@ -234,17 +234,26 @@ router.post('/forgot-password', async (req, res) => {
     const resolvedIdentifier = String(identifier || username || '').trim();
     const normalizedPhone = String(phone || '').trim();
 
-    if (!resolvedIdentifier || !normalizedPhone) {
-      return res.status(400).json({ message: 'Missing identifier or phone' });
+    if (!resolvedIdentifier) {
+      return res.status(400).json({ message: 'Missing username' });
     }
 
-    const user = await User.findOne({
-      phone: normalizedPhone,
+    const query = {
       $or: [{ username: resolvedIdentifier }, { email: resolvedIdentifier }],
-    });
+    };
+
+    if (normalizedPhone) {
+      query.phone = normalizedPhone;
+    }
+
+    const user = await User.findOne(query);
     if (!user) {
       return res.status(404).json({ message: 'Account not found' });
     }
+
+    const maskedPhone = user?.phone
+      ? String(user.phone).replace(/.(?=.{2})/g, '*')
+      : 'your phone number';
 
     const code = generate4DigitOtp();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -260,6 +269,7 @@ router.post('/forgot-password', async (req, res) => {
       success: true,
       resetOtpId: otpDoc._id,
       otp: code,
+      target: maskedPhone,
       expiresAt,
     });
   } catch (err) {
