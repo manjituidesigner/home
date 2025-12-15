@@ -13,6 +13,18 @@ const AddressSchema = new mongoose.Schema(
   { _id: false }
 );
 
+ const NamedAddressSchema = new mongoose.Schema(
+   {
+     name: { type: String, trim: true },
+     address: { type: String, trim: true },
+     city: { type: String, trim: true },
+     district: { type: String, trim: true },
+     state: { type: String, trim: true },
+     country: { type: String, trim: true },
+   },
+   { _id: false }
+ );
+
 const UserSchema = new mongoose.Schema(
   {
     firstName: { type: String, trim: true, required: true },
@@ -27,6 +39,8 @@ const UserSchema = new mongoose.Schema(
     dob: { type: String, trim: true },
     currentAddress: { type: AddressSchema, default: {} },
     permanentAddress: { type: AddressSchema, default: {} },
+    permanentAddressSameAsCurrent: { type: Boolean, default: false },
+    additionalAddresses: { type: [NamedAddressSchema], default: [] },
     isVerified: { type: Boolean, default: false },
   },
   { timestamps: true }

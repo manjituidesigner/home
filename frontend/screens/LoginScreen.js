@@ -13,6 +13,29 @@ const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
 const LOGIN_STORAGE_KEY = 'LOGIN_REMEMBER_CREDENTIALS';
 
+function isProfileComplete(user) {
+  const u = user || {};
+  const imageOk = !!String(u.profileImageUrl || '').trim();
+
+  const current = u.currentAddress || {};
+  const currentOk =
+    !!String(current.address || '').trim() &&
+    !!String(current.city || '').trim() &&
+    !!String(current.district || '').trim() &&
+    !!String(current.state || '').trim();
+
+  const sameAs = u.permanentAddressSameAsCurrent === true;
+  const permanent = u.permanentAddress || {};
+  const permanentOk = sameAs
+    ? true
+    : !!String(permanent.address || '').trim() &&
+      !!String(permanent.city || '').trim() &&
+      !!String(permanent.district || '').trim() &&
+      !!String(permanent.state || '').trim();
+
+  return imageOk && currentOk && permanentOk;
+}
+
 export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +80,11 @@ export default function LoginScreen({ navigation }) {
       }
 
       if (data?.user) {
-        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(data.user));
+        const userWithCompletion = {
+          ...data.user,
+          profileCompletionPercent: isProfileComplete(data.user) ? 100 : 0,
+        };
+        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(userWithCompletion));
       }
 
       if (rememberMe) {
@@ -69,7 +96,16 @@ export default function LoginScreen({ navigation }) {
         AsyncStorage.removeItem(LOGIN_STORAGE_KEY).catch(() => {});
       }
 
+      const nextUser = data?.user;
+      const needsProfile = nextUser ? !isProfileComplete(nextUser) : false;
       navigation.replace('Main');
+      if (needsProfile) {
+        setTimeout(() => {
+          navigation.navigate('Main', {
+            screen: 'Profile',
+          });
+        }, 0);
+      }
     } catch (e) {
       Alert.alert('Login failed', 'Unable to connect to server.');
     }

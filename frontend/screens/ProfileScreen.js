@@ -29,6 +29,12 @@ export default function ProfileScreen({ navigation }) {
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
+  const [profileImageDataUrl, setProfileImageDataUrl] = useState(null);
+  const [profileCompletionPercent, setProfileCompletionPercent] = useState(0);
+  const [additionalAddresses, setAdditionalAddresses] = useState([]);
+  const [mustConfirmPermanentSame, setMustConfirmPermanentSame] = useState(false);
+  const [hasLoadedBackendProfile, setHasLoadedBackendProfile] = useState(false);
+  const [missingFields, setMissingFields] = useState([]);
   const [lockedProfile, setLockedProfile] = useState({
     fullName: '',
     email: '',
@@ -59,19 +65,72 @@ export default function ProfileScreen({ navigation }) {
     },
   });
 
+  const calculateCompletion = (candidate) => {
+    const d = candidate || formData;
+    const imgOk =
+      !!String(lockedProfile.profileImageUrl || '').trim() ||
+      !!String(profileImage || '').trim();
+
+    const current = d.currentAddress || {};
+    const currentOk =
+      !!String(current.address || '').trim() &&
+      !!String(current.city || '').trim() &&
+      !!String(current.district || '').trim() &&
+      !!String(current.state || '').trim();
+
+    const sameOk = sameAsCurrent === true;
+    const permanent = d.permanentAddress || {};
+    const permanentOk =
+      sameOk ||
+      (!!String(permanent.address || '').trim() &&
+        !!String(permanent.city || '').trim() &&
+        !!String(permanent.district || '').trim() &&
+        !!String(permanent.state || '').trim());
+
+    const total = 3;
+    const done = (imgOk ? 1 : 0) + (currentOk ? 1 : 0) + (permanentOk ? 1 : 0);
+    return Math.round((done / total) * 100);
+  };
+
+  const computeMissingFields = (candidate) => {
+    const d = candidate || formData;
+    const missing = [];
+
+    const imgOk =
+      !!String(lockedProfile.profileImageUrl || '').trim() ||
+      !!String(profileImage || '').trim();
+    if (!imgOk) missing.push('Profile photo');
+
+    const current = d.currentAddress || {};
+    if (!String(current.address || '').trim()) missing.push('Current address');
+    if (!String(current.city || '').trim()) missing.push('Current city');
+    if (!String(current.district || '').trim()) missing.push('Current district');
+    if (!String(current.state || '').trim()) missing.push('Current state');
+
+    if (!sameAsCurrent) {
+      const permanent = d.permanentAddress || {};
+      if (!String(permanent.address || '').trim()) missing.push('Permanent address');
+      if (!String(permanent.city || '').trim()) missing.push('Permanent city');
+      if (!String(permanent.district || '').trim()) missing.push('Permanent district');
+      if (!String(permanent.state || '').trim()) missing.push('Permanent state');
+    }
+
+    return missing;
+  };
+
+  const canSave = () => {
+    const percent = calculateCompletion(formData);
+    if (percent !== 100) return false;
+    return true;
+  };
+
   // Check if all required fields are filled
   useEffect(() => {
-    const { fullName, email, mobile, currentAddress } = formData;
-    const isComplete =
-      fullName?.trim() &&
-      email?.trim() &&
-      mobile?.trim() &&
-      currentAddress?.address?.trim() &&
-      currentAddress?.city?.trim() &&
-      currentAddress?.district?.trim() &&
-      currentAddress?.state?.trim();
-    setIsProfileComplete(!!isComplete);
-  }, [formData]);
+    const percent = calculateCompletion(formData);
+    setProfileCompletionPercent(percent);
+    setIsProfileComplete(percent === 100);
+    setMissingFields(computeMissingFields(formData));
+  }, [formData, profileImage, lockedProfile.profileImageUrl, sameAsCurrent]);
 
   const getAuthHeaders = async () => {
     const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
@@ -102,6 +161,11 @@ export default function ProfileScreen({ navigation }) {
         const username = user.username || '';
         const profileImageUrl = user.profileImageUrl || '';
 
+        const permanentSame = user.permanentAddressSameAsCurrent === true;
+        setSameAsCurrent(permanentSame);
+        setMustConfirmPermanentSame(false);
+        setAdditionalAddresses(Array.isArray(user.additionalAddresses) ? user.additionalAddresses : []);
+
         setLockedProfile({ fullName, email, mobile, username, profileImageUrl });
         if (profileImageUrl) setProfileImage(profileImageUrl);
 
@@ -120,6 +184,8 @@ export default function ProfileScreen({ navigation }) {
             ...(user.permanentAddress || {}),
           },
         }));
+
+        setHasLoadedBackendProfile(true);
 
         await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(user));
       } catch (e) {
@@ -146,10 +212,16 @@ export default function ProfileScreen({ navigation }) {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true,
     });
 
     if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
+      const asset = result.assets?.[0];
+      setProfileImage(asset?.uri || null);
+      if (asset?.base64) {
+        const mime = asset?.mimeType || 'image/jpeg';
+        setProfileImageDataUrl(`data:${mime};base64,${asset.base64}`);
+      }
     }
   };
 
@@ -168,10 +240,16 @@ export default function ProfileScreen({ navigation }) {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true,
     });
 
     if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
+      const asset = result.assets?.[0];
+      setProfileImage(asset?.uri || null);
+      if (asset?.base64) {
+        const mime = asset?.mimeType || 'image/jpeg';
+        setProfileImageDataUrl(`data:${mime};base64,${asset.base64}`);
+      }
     }
   };
 
@@ -225,6 +303,9 @@ export default function ProfileScreen({ navigation }) {
           dob: formData.dob,
           currentAddress: formData.currentAddress,
           permanentAddress: sameAsCurrent ? formData.currentAddress : formData.permanentAddress,
+          permanentAddressSameAsCurrent: sameAsCurrent,
+          additionalAddresses,
+          profileImageDataUrl: lockedProfile.profileImageUrl ? undefined : profileImageDataUrl,
         }),
       });
 
@@ -235,15 +316,37 @@ export default function ProfileScreen({ navigation }) {
       }
 
       setIsEditing(false);
-      Alert.alert('Success', 'Profile saved successfully!');
+      const completion = calculateCompletion(formData);
+      if (completion === 100) {
+        Alert.alert('Success', 'Profile 100% completed. You can access all pages now.');
+      } else {
+        Alert.alert('Success', 'Details have been saved.');
+      }
 
       await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({
         ...formData,
         profileImage,
+        profileImageDataUrl,
+        sameAsCurrent,
+        additionalAddresses,
       }));
 
       if (data?.user) {
-        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(data.user));
+        const updatedUser = {
+          ...data.user,
+          profileCompletionPercent: calculateCompletion(formData),
+          isProfileComplete: calculateCompletion(formData) === 100,
+        };
+        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedUser));
+
+        if (String(data.user.profileImageUrl || '').trim()) {
+          setLockedProfile((prev) => ({
+            ...prev,
+            profileImageUrl: data.user.profileImageUrl,
+          }));
+          setProfileImage(data.user.profileImageUrl);
+          setProfileImageDataUrl(null);
+        }
       }
     } catch (e) {
       Alert.alert('Error', 'Unable to save profile.');
@@ -260,7 +363,7 @@ export default function ProfileScreen({ navigation }) {
     const isCurrent = type === 'current';
     const isPermanentEditable = type === 'permanent' && !sameAsCurrent;
 
-    // If permanent is same as current, just show note
+    // If permanent is same as current, show note
     if (!isCurrent && sameAsCurrent) {
       return (
         <View style={styles.sectionCard}>
@@ -292,7 +395,7 @@ export default function ProfileScreen({ navigation }) {
                 <Ionicons name="checkmark" size={16} color="white" />
               )}
             </View>
-            <Text style={styles.sameAsLabel}>Same as current address</Text>
+            <Text style={styles.sameAsLabel}>Same as current address (Mandatory)</Text>
           </TouchableOpacity>
         )}
 
@@ -481,6 +584,7 @@ export default function ProfileScreen({ navigation }) {
   useEffect(() => {
     const loadSavedData = async () => {
       try {
+        if (hasLoadedBackendProfile) return;
         const jsonValue = await AsyncStorage.getItem(PROFILE_STORAGE_KEY);
         if (jsonValue) {
           const savedProfile = JSON.parse(jsonValue);
@@ -499,6 +603,12 @@ export default function ProfileScreen({ navigation }) {
           if (savedProfile.profileImage) {
             setProfileImage(savedProfile.profileImage);
           }
+          if (typeof savedProfile.sameAsCurrent === 'boolean') {
+            setSameAsCurrent(savedProfile.sameAsCurrent);
+          }
+          if (Array.isArray(savedProfile.additionalAddresses)) {
+            setAdditionalAddresses(savedProfile.additionalAddresses);
+          }
         }
       } catch (e) {
         // ignore load errors
@@ -506,7 +616,7 @@ export default function ProfileScreen({ navigation }) {
     };
 
     loadSavedData();
-  }, []);
+  }, [hasLoadedBackendProfile]);
 
   return (
     <ScreenLayout
@@ -524,7 +634,44 @@ export default function ProfileScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.profileCard}>
-            <Text style={styles.cardTitle}>Edit Profile</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.cardTitle}>Edit Profile</Text>
+              {!isEditing && (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => setIsEditing(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="create-outline" size={18} color="#111827" />
+                  <Text style={styles.editButtonLabel}>Edit</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.completionCard}>
+              <View style={styles.completionRow}>
+                <Text style={styles.completionLabel}>Profile completion</Text>
+                <Text style={styles.completionValue}>{profileCompletionPercent}%</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${Math.max(0, Math.min(100, profileCompletionPercent))}%` },
+                  ]}
+                />
+              </View>
+              {!isProfileComplete && (
+                <Text style={styles.completionHint}>
+                  Complete photo, current address and confirm permanent address to unlock all pages.
+                </Text>
+              )}
+              {!isProfileComplete && missingFields?.length > 0 && (
+                <Text style={styles.completionHint}>
+                  Missing: {missingFields.slice(0, 4).join(', ')}{missingFields.length > 4 ? '...' : ''}
+                </Text>
+              )}
+            </View>
 
             <View style={styles.avatarSection}>
               <TouchableOpacity
@@ -590,7 +737,7 @@ export default function ProfileScreen({ navigation }) {
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Email Address"
+                  placeholder="Email Address (Optional)"
                   value={formData.email}
                   onChangeText={text => handleInputChange('email', text)}
                   keyboardType="email-address"
@@ -654,73 +801,270 @@ export default function ProfileScreen({ navigation }) {
 
             {renderAddressFields('current')}
             {renderAddressFields('permanent')}
+
+            <View style={styles.sectionCard}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionIndicator} />
+                <Text style={styles.sectionTitleText}>Additional Addresses</Text>
+              </View>
+
+              {additionalAddresses.map((addr, idx) => (
+                <View key={`${idx}`} style={styles.additionalBlock}>
+                  <View style={styles.row}>
+                    <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                      <MaterialIcons
+                        name="badge"
+                        size={20}
+                        color={theme.colors.primary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Address Name (Owner/Broker)"
+                        value={addr?.name || ''}
+                        onChangeText={(text) => {
+                          if (!isEditing) return;
+                          setAdditionalAddresses((prev) =>
+                            prev.map((a, i) => (i === idx ? { ...a, name: text } : a))
+                          );
+                        }}
+                        editable={isEditing}
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+
+                    {isEditing && (
+                      <TouchableOpacity
+                        style={styles.removeAddressBtn}
+                        onPress={() =>
+                          setAdditionalAddresses((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#ffffff" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <MaterialIcons
+                      name="location-on"
+                      size={20}
+                      color={theme.colors.primary}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Address"
+                      value={addr?.address || ''}
+                      onChangeText={(text) => {
+                        if (!isEditing) return;
+                        setAdditionalAddresses((prev) =>
+                          prev.map((a, i) => (i === idx ? { ...a, address: text } : a))
+                        );
+                      }}
+                      editable={isEditing}
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <View style={styles.row}>
+                    <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                      <MaterialIcons
+                        name="location-city"
+                        size={20}
+                        color={theme.colors.primary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="City"
+                        value={addr?.city || ''}
+                        onChangeText={(text) => {
+                          if (!isEditing) return;
+                          setAdditionalAddresses((prev) =>
+                            prev.map((a, i) => (i === idx ? { ...a, city: text } : a))
+                          );
+                        }}
+                        editable={isEditing}
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                      <MaterialIcons
+                        name="map"
+                        size={20}
+                        color={theme.colors.primary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="District"
+                        value={addr?.district || ''}
+                        onChangeText={(text) => {
+                          if (!isEditing) return;
+                          setAdditionalAddresses((prev) =>
+                            prev.map((a, i) => (i === idx ? { ...a, district: text } : a))
+                          );
+                        }}
+                        editable={isEditing}
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.row}>
+                    <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                      <MaterialIcons
+                        name="public"
+                        size={20}
+                        color={theme.colors.primary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="State"
+                        value={addr?.state || ''}
+                        onChangeText={(text) => {
+                          if (!isEditing) return;
+                          setAdditionalAddresses((prev) =>
+                            prev.map((a, i) => (i === idx ? { ...a, state: text } : a))
+                          );
+                        }}
+                        editable={isEditing}
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1 }]}>
+                      <MaterialIcons
+                        name="flag"
+                        size={20}
+                        color={theme.colors.primary}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Country"
+                        value={addr?.country || 'India'}
+                        onChangeText={(text) => {
+                          if (!isEditing) return;
+                          setAdditionalAddresses((prev) =>
+                            prev.map((a, i) => (i === idx ? { ...a, country: text } : a))
+                          );
+                        }}
+                        editable={false}
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {isEditing && (
+                <TouchableOpacity
+                  style={styles.addMoreBtn}
+                  onPress={() =>
+                    setAdditionalAddresses((prev) => [
+                      ...prev,
+                      {
+                        name: '',
+                        address: '',
+                        city: '',
+                        district: '',
+                        state: '',
+                        country: 'India',
+                      },
+                    ])
+                  }
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#111827" />
+                  <Text style={styles.addMoreLabel}>Add More Address</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </ScrollView>
 
-        {isEditing && (
-          <View style={styles.bottomBar}>
-            <TouchableOpacity
-              style={[styles.bottomButton, styles.bottomCancelButton]}
-              onPress={() => {
-                setIsEditing(false);
-                const loadSavedData = async () => {
-                  try {
-                    const jsonValue = await AsyncStorage.getItem(
-                      PROFILE_STORAGE_KEY,
-                    );
-                    if (jsonValue) {
-                      const savedProfile = JSON.parse(jsonValue);
-                      setFormData(prev => ({
-                        ...prev,
-                        ...savedProfile,
-                        currentAddress: {
-                          ...prev.currentAddress,
-                          ...savedProfile.currentAddress,
-                        },
-                        permanentAddress: {
-                          ...prev.permanentAddress,
-                          ...savedProfile.permanentAddress,
-                        },
-                      }));
-                      if (savedProfile.profileImage) {
-                        setProfileImage(savedProfile.profileImage);
+        <View style={styles.bottomBar}>
+          {isEditing ? (
+            <>
+              <TouchableOpacity
+                style={[styles.bottomButton, styles.bottomCancelButton]}
+                onPress={() => {
+                  setIsEditing(false);
+                  const loadSavedData = async () => {
+                    try {
+                      const jsonValue = await AsyncStorage.getItem(
+                        PROFILE_STORAGE_KEY,
+                      );
+                      if (jsonValue) {
+                        const savedProfile = JSON.parse(jsonValue);
+                        setFormData(prev => ({
+                          ...prev,
+                          ...savedProfile,
+                          currentAddress: {
+                            ...prev.currentAddress,
+                            ...savedProfile.currentAddress,
+                          },
+                          permanentAddress: {
+                            ...prev.permanentAddress,
+                            ...savedProfile.permanentAddress,
+                          },
+                        }));
+                        if (savedProfile.profileImage) {
+                          setProfileImage(savedProfile.profileImage);
+                        }
                       }
+                    } catch (e) {
+                      // ignore load errors
                     }
-                  } catch (e) {
-                    // ignore load errors
-                  }
-                };
-                loadSavedData();
-              }}
-            >
-              <Text
-                style={[
-                  styles.buttonText,
-                  { color: theme.colors.textSecondary || '#6b7280' },
-                ]}
+                  };
+                  loadSavedData();
+                }}
               >
-                Cancel
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: theme.colors.textSecondary || '#6b7280' },
+                  ]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
 
+              <TouchableOpacity
+                style={[styles.bottomButton, styles.bottomUpdateButton]}
+                onPress={isProfileComplete ? handleUpdate : handleSave}
+              >
+                <Ionicons name="checkmark" size={18} color="#ffffff" />
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: '#ffffff', marginLeft: 8 },
+                  ]}
+                >
+                  Save Details
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
             <TouchableOpacity
               style={[styles.bottomButton, styles.bottomUpdateButton]}
-              onPress={isProfileComplete ? handleUpdate : handleSave}
-              disabled={!isProfileComplete}
+              onPress={() => setIsEditing(true)}
             >
-              <Ionicons name="checkmark" size={18} color="#ffffff" />
+              <Ionicons name="create-outline" size={18} color="#ffffff" />
               <Text
                 style={[
                   styles.buttonText,
                   { color: '#ffffff', marginLeft: 8 },
-                  !isProfileComplete && { opacity: 0.7 },
                 ]}
               >
-                Save Details
+                Edit Profile
               </Text>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </View>
     </ScreenLayout>
   );
@@ -755,6 +1099,107 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: theme.colors.text,
     marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  editButtonLabel: {
+    marginLeft: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  completionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 12,
+    marginBottom: 16,
+  },
+  completionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  completionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  completionValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  completionHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  sectionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 12,
+    marginBottom: 12,
+  },
+  formSection: {
+    marginBottom: 12,
+  },
+  additionalBlock: {
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  addMoreBtn: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addMoreLabel: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  removeAddressBtn: {
+    width: 42,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarSection: {
     alignItems: 'center',

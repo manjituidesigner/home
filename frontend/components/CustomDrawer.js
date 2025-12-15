@@ -1,10 +1,21 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../theme';
+
+const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
+
+function isCompletion100(user) {
+  const percent = Number(user?.profileCompletionPercent);
+  if (Number.isFinite(percent) && percent >= 100) return true;
+  if (user?.isProfileComplete === true) return true;
+  return false;
+}
 
 export default function CustomDrawer(props) {
   const { state, navigation } = props;
+  const [profileComplete, setProfileComplete] = useState(true);
 
   const menuItems = [
     { key: 'Dashboard', label: 'Dashboard', icon: '\u25a2' },
@@ -20,9 +31,37 @@ export default function CustomDrawer(props) {
     { key: 'Logout', label: 'Logout', icon: '\u23cb' },
   ];
 
+  useEffect(() => {
+    let mounted = true;
+    const loadProfile = async () => {
+      try {
+        const json = await AsyncStorage.getItem(USER_PROFILE_STORAGE_KEY);
+        const user = json ? JSON.parse(json) : null;
+        if (!mounted) return;
+        setProfileComplete(isCompletion100(user));
+      } catch (e) {
+        if (!mounted) return;
+        setProfileComplete(false);
+      }
+    };
+
+    loadProfile();
+    const unsub = navigation.addListener('focus', loadProfile);
+    return () => {
+      mounted = false;
+      if (typeof unsub === 'function') unsub();
+    };
+  }, [navigation]);
+
   const handleNavigate = (itemKey) => {
     if (itemKey === 'Logout') {
       handleLogout();
+      return;
+    }
+
+    if (!profileComplete && itemKey !== 'Profile') {
+      Alert.alert('Complete Profile', 'Please complete your profile 100% to access other pages.');
+      navigation.navigate('Profile');
       return;
     }
 
