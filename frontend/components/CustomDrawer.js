@@ -78,6 +78,7 @@ export default function CustomDrawer(props) {
         { key: 'Wishlist', label: 'Wishlist', icon: '\u2764' },
         { key: 'Tenents', label: 'Tenents', icon: '\ud83d\udc65' },
         { key: 'Payments', label: 'Payments', icon: '\ud83d\udcb3' },
+        { key: 'Offers', label: 'Offers', icon: '\ud83d\udce9' },
         { key: 'Settings', label: 'Settings', icon: '\u2699' },
         { key: 'Documents', label: 'Documents', icon: '\ud83d\udcc4' },
         { key: 'Ads', label: 'Ads', icon: '\ud83d\udce2' },

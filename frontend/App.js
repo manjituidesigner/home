@@ -20,6 +20,7 @@ import PaymentsScreen from './screens/PaymentsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import DocumentsScreen from './screens/DocumentsScreen';
 import OwnersScreen from './screens/OwnersScreen';
+import OffersScreen from './screens/OffersScreen';
 import AgreementScreen from './screens/AgreementScreen';
 import ChatScreen from './screens/ChatScreen';
 import DocsScreen from './screens/DocsScreen';
@@ -43,6 +44,7 @@ function MainDrawer() {
       <Drawer.Screen name="Tenents" component={TenentsScreen} />
       <Drawer.Screen name="Owners" component={OwnersScreen} />
       <Drawer.Screen name="Payments" component={PaymentsScreen} />
+      <Drawer.Screen name="Offers" component={OffersScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
       <Drawer.Screen name="Documents" component={DocumentsScreen} />
       <Drawer.Screen name="Docs" component={DocsScreen} />

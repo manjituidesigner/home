@@ -4,18 +4,27 @@ import {
   View,
   Text,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   Dimensions,
   Switch,
   Linking,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../theme';
 import PropertyImageSlider from '../components/PropertyImageSlider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSessionUser } from '../session';
+
+const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
+const RENDER_BASE_URL = 'https://home-backend-zc1d.onrender.com';
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,6 +49,18 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   );
   const [openAmenities, setOpenAmenities] = useState(false);
   const [openRules, setOpenRules] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [submittingOffer, setSubmittingOffer] = useState(false);
+  const [offerData, setOfferData] = useState({
+    offerRent: '',
+    joiningDateEstimate: '',
+    offerAdvance: '',
+    offerBookingAmount: '',
+    needsBikeParking: false,
+    needsCarParking: false,
+    tenantType: '',
+    acceptsRules: false,
+  });
 
   const roleFromParams = String(route?.params?.fromRole || '').trim().toLowerCase();
   const sessionRole = String(getSessionUser()?.role || '').trim().toLowerCase();
@@ -103,6 +124,68 @@ export default function PropertyDetailsScreen({ route, navigation }) {
     ? rulesSummary.join(', ')
     : 'Rules not specified';
 
+  const ownerTenantTypes = Array.isArray(property.preferredTenantTypes)
+    ? property.preferredTenantTypes
+    : [];
+
+  const ownerParkingType = String(property.parkingType || 'none').trim().toLowerCase();
+  const ownerAllowsBike = ownerParkingType === 'bike' || ownerParkingType === 'both';
+  const ownerAllowsCar = ownerParkingType === 'car' || ownerParkingType === 'both';
+
+  const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const parseMoney = (v) => {
+    const n = Number(String(v || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const computeOfferMatchPercent = () => {
+    const ownerRent = parseMoney(property.rentAmount);
+    const ownerAdvance = parseMoney(property.advanceAmount);
+    const ownerBooking = parseMoney(property.bookingAdvance);
+
+    const offerRent = parseMoney(offerData.offerRent);
+    const offerAdvance = parseMoney(offerData.offerAdvance);
+    const offerBooking = parseMoney(offerData.offerBookingAmount);
+
+    let score = 0;
+    let total = 0;
+
+    const addBinary = (ok) => {
+      total += 1;
+      if (ok) score += 1;
+    };
+
+    const addMoney = (ownerVal, offerVal) => {
+      if (ownerVal == null || ownerVal <= 0 || offerVal == null || offerVal < 0) return;
+      total += 1;
+      const ratio = offerVal / ownerVal;
+      const closeness = Math.max(0, 1 - Math.abs(1 - ratio));
+      score += Math.min(1, closeness);
+    };
+
+    addMoney(ownerRent, offerRent);
+    addMoney(ownerAdvance, offerAdvance);
+    addMoney(ownerBooking, offerBooking);
+
+    if (ownerTenantTypes.length) {
+      addBinary(ownerTenantTypes.includes(offerData.tenantType));
+    }
+
+    if (offerData.needsBikeParking) addBinary(ownerAllowsBike);
+    if (offerData.needsCarParking) addBinary(ownerAllowsCar);
+
+    if (rulesSummary.length) addBinary(offerData.acceptsRules);
+
+    if (total === 0) return 0;
+    return Math.round((score / total) * 100);
+  };
+
+  const offerMatchPercent = computeOfferMatchPercent();
+
   const statusLabel = property.status === 'occupied' ? 'Occupied' : 'Open';
   const statusBoxColor =
     property.status === 'occupied' ? '#ffe5e5' : '#dff6e6';
@@ -136,7 +219,71 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   };
 
   const handleMakeOffer = () => {
-    Alert.alert('Make Offer', 'Offer request sent.');
+    setOfferOpen(true);
+  };
+
+  const submitOffer = async () => {
+    if (submittingOffer) return;
+
+    const offerRent = parseMoney(offerData.offerRent);
+    if (offerRent == null || offerRent <= 0) {
+      Alert.alert('Offer', 'Please enter a valid offer price.');
+      return;
+    }
+    if (!String(offerData.joiningDateEstimate || '').trim()) {
+      Alert.alert('Offer', 'Please enter joining date estimate.');
+      return;
+    }
+    if (rulesSummary.length && !offerData.acceptsRules) {
+      Alert.alert('Offer', 'Please accept the owner rules / conditions.');
+      return;
+    }
+
+    const payload = {
+      propertyId: property?._id,
+      ownerId: property?.ownerId || property?.userId || property?.createdBy,
+      offer: {
+        offerRent,
+        joiningDateEstimate: String(offerData.joiningDateEstimate || '').trim(),
+        offerAdvance: parseMoney(offerData.offerAdvance),
+        offerBookingAmount: parseMoney(offerData.offerBookingAmount),
+        needsBikeParking: !!offerData.needsBikeParking,
+        needsCarParking: !!offerData.needsCarParking,
+        tenantType: String(offerData.tenantType || '').trim(),
+        acceptsRules: !!offerData.acceptsRules,
+        matchPercent: offerMatchPercent,
+      },
+    };
+
+    try {
+      setSubmittingOffer(true);
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/offers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        let msg = 'Failed to submit offer.';
+        try {
+          const data = await response.json();
+          msg = String(data?.message || data?.error || msg);
+        } catch (e) {}
+        Alert.alert('Offer', msg);
+        return;
+      }
+
+      setOfferOpen(false);
+      Alert.alert('Offer', 'Offer submitted to owner.');
+    } catch (e) {
+      Alert.alert('Offer', 'Network error while submitting offer.');
+    } finally {
+      setSubmittingOffer(false);
+    }
   };
 
   return (
@@ -393,6 +540,202 @@ export default function PropertyDetailsScreen({ route, navigation }) {
 
           <View style={{ height: 90 }} />
         </ScrollView>
+
+        <Modal
+          transparent
+          visible={offerOpen}
+          animationType="slide"
+          onRequestClose={() => setOfferOpen(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Make Offer</Text>
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setOfferOpen(false)}
+                >
+                  <Ionicons name="close" size={22} color="#1b263b" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.compareWrap}>
+                  <View style={styles.compareCol}>
+                    <Text style={styles.compareHeading}>Owner Terms</Text>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Rent</Text>
+                      <Text style={styles.compareValue}>{rentAmount}</Text>
+                    </View>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Advance</Text>
+                      <Text style={styles.compareValue}>{advanceAmount}</Text>
+                    </View>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Booking Amount</Text>
+                      <Text style={styles.compareValue}>
+                        {property.bookingAdvance ? `₹${property.bookingAdvance}` : 'Not set'}
+                      </Text>
+                    </View>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Booking Validity</Text>
+                      <Text style={styles.compareValue}>
+                        {property.bookingValidityDays
+                          ? `${property.bookingValidityDays} days`
+                          : 'Not set'}
+                      </Text>
+                    </View>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Parking</Text>
+                      <Text style={styles.compareValue}>
+                        {property.parkingType ? String(property.parkingType) : 'Not set'}
+                      </Text>
+                    </View>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Preferred Tenants</Text>
+                      <Text style={styles.compareValue}>
+                        {ownerTenantTypes.length ? ownerTenantTypes.join(', ') : 'Not set'}
+                      </Text>
+                    </View>
+                    <View style={styles.compareRow}>
+                      <Text style={styles.compareLabel}>Rules</Text>
+                      <Text style={styles.compareValue}>{rulesText}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.compareDivider} />
+
+                  <View style={styles.compareCol}>
+                    <Text style={styles.compareHeading}>Your Offer</Text>
+
+                    <Text style={styles.inputLabel}>Offer price (per month)</Text>
+                    <TextInput
+                      value={offerData.offerRent}
+                      onChangeText={(t) =>
+                        setOfferData((p) => ({ ...p, offerRent: t }))
+                      }
+                      keyboardType="numeric"
+                      placeholder="Enter your offer rent"
+                      style={styles.input}
+                    />
+
+                    <Text style={styles.inputLabel}>Joining date estimate</Text>
+                    <TextInput
+                      value={offerData.joiningDateEstimate}
+                      onChangeText={(t) =>
+                        setOfferData((p) => ({ ...p, joiningDateEstimate: t }))
+                      }
+                      placeholder="e.g. 10 Jan 2026"
+                      style={styles.input}
+                    />
+
+                    <Text style={styles.inputLabel}>Advance (optional)</Text>
+                    <TextInput
+                      value={offerData.offerAdvance}
+                      onChangeText={(t) =>
+                        setOfferData((p) => ({ ...p, offerAdvance: t }))
+                      }
+                      keyboardType="numeric"
+                      placeholder="Enter advance"
+                      style={styles.input}
+                    />
+
+                    <Text style={styles.inputLabel}>Booking amount (optional)</Text>
+                    <TextInput
+                      value={offerData.offerBookingAmount}
+                      onChangeText={(t) =>
+                        setOfferData((p) => ({ ...p, offerBookingAmount: t }))
+                      }
+                      keyboardType="numeric"
+                      placeholder="Enter booking amount"
+                      style={styles.input}
+                    />
+
+                    <Text style={styles.inputLabel}>Parking needed</Text>
+                    <View style={styles.checkRow}>
+                      <TouchableOpacity
+                        style={styles.checkItem}
+                        onPress={() =>
+                          setOfferData((p) => ({
+                            ...p,
+                            needsBikeParking: !p.needsBikeParking,
+                          }))
+                        }
+                      >
+                        <Ionicons
+                          name={offerData.needsBikeParking ? 'checkbox' : 'square-outline'}
+                          size={18}
+                          color={theme.colors.primary}
+                        />
+                        <Text style={styles.checkText}>Bike</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.checkItem}
+                        onPress={() =>
+                          setOfferData((p) => ({
+                            ...p,
+                            needsCarParking: !p.needsCarParking,
+                          }))
+                        }
+                      >
+                        <Ionicons
+                          name={offerData.needsCarParking ? 'checkbox' : 'square-outline'}
+                          size={18}
+                          color={theme.colors.primary}
+                        />
+                        <Text style={styles.checkText}>Car</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.inputLabel}>Tenant type</Text>
+                    <TextInput
+                      value={offerData.tenantType}
+                      onChangeText={(t) =>
+                        setOfferData((p) => ({ ...p, tenantType: t }))
+                      }
+                      placeholder="e.g. Working Boys / Small Family"
+                      style={styles.input}
+                    />
+
+                    <TouchableOpacity
+                      style={styles.checkItem}
+                      onPress={() =>
+                        setOfferData((p) => ({
+                          ...p,
+                          acceptsRules: !p.acceptsRules,
+                        }))
+                      }
+                    >
+                      <Ionicons
+                        name={offerData.acceptsRules ? 'checkbox' : 'square-outline'}
+                        size={18}
+                        color={theme.colors.primary}
+                      />
+                      <Text style={styles.checkText}>I accept owner rules & conditions</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.matchBox}>
+                  <Text style={styles.matchLabel}>Matching profile</Text>
+                  <Text style={styles.matchValue}>{offerMatchPercent}%</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.submitOfferBtn, submittingOffer && styles.submitOfferBtnDisabled]}
+                  onPress={submitOffer}
+                  disabled={submittingOffer}
+                >
+                  <Text style={styles.submitOfferBtnText}>
+                    {submittingOffer ? 'Submitting...' : 'Submit Offer'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={{ height: 12 }} />
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         {/* Bottom fixed actions */}
         <View style={styles.bottomBar}>
@@ -674,5 +1017,137 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 16,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 16,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0b2545',
+  },
+  modalCloseBtn: {
+    padding: 6,
+  },
+  compareWrap: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#e6eaf2',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  compareCol: {
+    flex: 1,
+    padding: 12,
+  },
+  compareDivider: {
+    width: 1,
+    backgroundColor: '#e6eaf2',
+  },
+  compareHeading: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1b263b',
+    marginBottom: 10,
+  },
+  compareRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f3f8',
+  },
+  compareLabel: {
+    fontSize: 12,
+    color: '#6b7a90',
+    marginBottom: 4,
+  },
+  compareValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0b2545',
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: '#6b7a90',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e6eaf2',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0b2545',
+    backgroundColor: '#ffffff',
+  },
+  checkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  checkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    marginRight: 14,
+  },
+  checkText: {
+    fontSize: 13,
+    color: '#0b2545',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  matchBox: {
+    marginTop: 12,
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#f2f5f9',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  matchLabel: {
+    fontSize: 13,
+    color: '#6b7a90',
+    fontWeight: '700',
+  },
+  matchValue: {
+    fontSize: 18,
+    color: theme.colors.primary,
+    fontWeight: '900',
+  },
+  submitOfferBtn: {
+    marginTop: 12,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitOfferBtnDisabled: {
+    opacity: 0.6,
+  },
+  submitOfferBtnText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 15,
   },
 });
