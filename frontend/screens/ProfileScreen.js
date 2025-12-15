@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
+import LoadingOverlay from '../components/LoadingOverlay';
 
 const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
@@ -35,6 +36,7 @@ export default function ProfileScreen({ navigation }) {
   const [mustConfirmPermanentSame, setMustConfirmPermanentSame] = useState(false);
   const [hasLoadedBackendProfile, setHasLoadedBackendProfile] = useState(false);
   const [missingFields, setMissingFields] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [lockedProfile, setLockedProfile] = useState({
     fullName: '',
     email: '',
@@ -138,8 +140,10 @@ export default function ProfileScreen({ navigation }) {
   };
 
   useEffect(() => {
-    const loadFromBackend = async () => {
+    let mounted = true;
+    const loadBackendProfile = async () => {
       try {
+        setLoading(true);
         const authHeaders = await getAuthHeaders();
         if (!authHeaders.Authorization) return;
 
@@ -187,13 +191,29 @@ export default function ProfileScreen({ navigation }) {
 
         setHasLoadedBackendProfile(true);
 
-        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(user));
+        const completionUser = {
+          ...user,
+          profileCompletionPercent: calculateCompletion({
+            ...formData,
+            dob: user.dob || formData.dob,
+            currentAddress: { ...formData.currentAddress, ...(user.currentAddress || {}) },
+            permanentAddress: { ...formData.permanentAddress, ...(user.permanentAddress || {}) },
+          }),
+        };
+        completionUser.isProfileComplete = Number(completionUser.profileCompletionPercent) >= 100;
+
+        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(completionUser));
       } catch (e) {
-        // ignore load errors
+        // ignore backend load errors
+      } finally {
+        if (mounted) setLoading(false);
       }
     };
 
-    loadFromBackend();
+    loadBackendProfile();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const pickImage = async () => {
@@ -292,6 +312,7 @@ export default function ProfileScreen({ navigation }) {
 
   const handleSave = async () => {
     try {
+      setLoading(true);
       const authHeaders = await getAuthHeaders();
       const response = await fetch(`${API_BASE_URL}/api/users/me`, {
         method: 'PUT',
@@ -350,6 +371,8 @@ export default function ProfileScreen({ navigation }) {
       }
     } catch (e) {
       Alert.alert('Error', 'Unable to save profile.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -985,86 +1008,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
         </ScrollView>
-
-        <View style={styles.bottomBar}>
-          {isEditing ? (
-            <>
-              <TouchableOpacity
-                style={[styles.bottomButton, styles.bottomCancelButton]}
-                onPress={() => {
-                  setIsEditing(false);
-                  const loadSavedData = async () => {
-                    try {
-                      const jsonValue = await AsyncStorage.getItem(
-                        PROFILE_STORAGE_KEY,
-                      );
-                      if (jsonValue) {
-                        const savedProfile = JSON.parse(jsonValue);
-                        setFormData(prev => ({
-                          ...prev,
-                          ...savedProfile,
-                          currentAddress: {
-                            ...prev.currentAddress,
-                            ...savedProfile.currentAddress,
-                          },
-                          permanentAddress: {
-                            ...prev.permanentAddress,
-                            ...savedProfile.permanentAddress,
-                          },
-                        }));
-                        if (savedProfile.profileImage) {
-                          setProfileImage(savedProfile.profileImage);
-                        }
-                      }
-                    } catch (e) {
-                      // ignore load errors
-                    }
-                  };
-                  loadSavedData();
-                }}
-              >
-                <Text
-                  style={[
-                    styles.buttonText,
-                    { color: theme.colors.textSecondary || '#6b7280' },
-                  ]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.bottomButton, styles.bottomUpdateButton]}
-                onPress={isProfileComplete ? handleUpdate : handleSave}
-              >
-                <Ionicons name="checkmark" size={18} color="#ffffff" />
-                <Text
-                  style={[
-                    styles.buttonText,
-                    { color: '#ffffff', marginLeft: 8 },
-                  ]}
-                >
-                  Save Details
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity
-              style={[styles.bottomButton, styles.bottomUpdateButton]}
-              onPress={() => setIsEditing(true)}
-            >
-              <Ionicons name="create-outline" size={18} color="#ffffff" />
-              <Text
-                style={[
-                  styles.buttonText,
-                  { color: '#ffffff', marginLeft: 8 },
-                ]}
-              >
-                Edit Profile
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <LoadingOverlay visible={loading} />
       </View>
     </ScreenLayout>
   );

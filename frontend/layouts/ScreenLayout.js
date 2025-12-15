@@ -9,9 +9,11 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import theme from '../theme';
+import HomeIcon from '../assets/home-icon.svg';
 
 export default function ScreenLayout({
   title,
+  subtitle,
   children,
   headerRight,
   onPressMenu,
@@ -25,9 +27,16 @@ export default function ScreenLayout({
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
             <View style={styles.logoWrapper}>
-              <Text style={styles.logoText}>LOGO</Text>
+              <HomeIcon width={22} height={22} />
             </View>
-            <Text style={styles.headerTitle}>{title}</Text>
+            <View style={styles.headerTitleBlock}>
+              <Text style={styles.headerTitle}>{title}</Text>
+              {!!subtitle && (
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              )}
+            </View>
             <View style={styles.headerRightGroup}>
               {headerRight}
               {onPressMenu ? (
@@ -84,23 +93,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   logoWrapper: {
-    paddingVertical: 6,
-    paddingHorizontal: theme.spacing.md,
+    width: 38,
+    height: 38,
     borderRadius: 999,
-    backgroundColor: theme.colors.primary,
-  },
-  logoText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: theme.colors.text,
     textAlign: 'left',
+    marginBottom: 2,
+  },
+  headerTitleBlock: {
     flex: 1,
     marginHorizontal: theme.spacing.md,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
   },
   headerRightGroup: {
     flexDirection: 'row',

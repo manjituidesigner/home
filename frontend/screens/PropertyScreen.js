@@ -10,6 +10,7 @@ import {
   Modal,
   Linking,
   Image,
+  Switch,
   Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 import PropertyImageSlider from '../components/PropertyImageSlider';
+import LoadingOverlay from '../components/LoadingOverlay';
 
 const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
 const RENDER_BASE_URL = 'https://home-backend-zc1d.onrender.com';
@@ -153,6 +155,7 @@ function createEmptyProperty() {
     lateNightMode: 'anytime', // anytime | till_time
     lateNightLastTime: '',
     status: 'available',
+    visibleForTenants: false,
   };
 }
 
@@ -734,6 +737,7 @@ export default function PropertyScreen({ navigation, route }) {
       }}
     >
       <View style={styles.fullBleed}>
+        <LoadingOverlay visible={saving || loadingList} />
         {mode === 'add' ? (
           <>
             {/* Top step progress */}
@@ -1248,7 +1252,20 @@ export default function PropertyScreen({ navigation, route }) {
         <View style={styles.sectionCard}>
           <View style={styles.sectionTitle}>
             <View style={styles.sectionTitleAccent} />
-            <Text style={styles.sectionTitleText}>Tenant Rules & Preferences</Text>
+            <Text style={styles.sectionTitleText}>Tenant rules & preferences</Text>
+          </View>
+
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleTextBlock}>
+              <Text style={styles.toggleTitle}>Property is visible for tenants</Text>
+              <Text style={styles.toggleSubtitle}>
+                Enable this to show your property in Tenant dashboard listings.
+              </Text>
+            </View>
+            <Switch
+              value={!!activeProperty.visibleForTenants}
+              onValueChange={(val) => updateActiveProperty({ visibleForTenants: !!val })}
+            />
           </View>
           <Text style={styles.summaryText}>{buildTenantSummary()}</Text>
 

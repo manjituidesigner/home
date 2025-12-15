@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import PrimaryButton from '../components/PrimaryButton';
 import theme from '../theme';
+import { setSessionToken, setSessionUser } from '../session';
+import LoadingOverlay from '../components/LoadingOverlay';
 
 const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
 const RENDER_BASE_URL = 'https://home-backend-zc1d.onrender.com';
@@ -40,6 +42,7 @@ export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadSavedCredentials = async () => {
@@ -62,6 +65,8 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   const handleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -76,15 +81,18 @@ export default function LoginScreen({ navigation }) {
       }
 
       if (data?.token) {
-        await AsyncStorage.setItem(AUTH_TOKEN_STORAGE_KEY, String(data.token));
+        setSessionToken(data.token);
+        AsyncStorage.setItem(AUTH_TOKEN_STORAGE_KEY, String(data.token)).catch(() => {});
       }
 
       if (data?.user) {
         const userWithCompletion = {
           ...data.user,
           profileCompletionPercent: isProfileComplete(data.user) ? 100 : 0,
+          isProfileComplete: isProfileComplete(data.user),
         };
-        await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(userWithCompletion));
+        setSessionUser(userWithCompletion);
+        AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(userWithCompletion)).catch(() => {});
       }
 
       if (rememberMe) {
@@ -99,21 +107,22 @@ export default function LoginScreen({ navigation }) {
       const nextUser = data?.user;
       const needsProfile = nextUser ? !isProfileComplete(nextUser) : false;
       navigation.replace('Main');
-      if (needsProfile) {
-        setTimeout(() => {
-          navigation.navigate('Main', {
-            screen: 'Profile',
-          });
-        }, 0);
-      }
+      setTimeout(() => {
+        navigation.navigate('Main', {
+          screen: needsProfile ? 'Profile' : 'Dashboard',
+        });
+      }, 0);
     } catch (e) {
       Alert.alert('Login failed', 'Unable to connect to server.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <ScreenLayout title="Login" showHeader={false}>
       <View style={styles.container}>
+        <LoadingOverlay visible={loading} />
         <View style={styles.heroBlock}>
           <Text style={styles.heroTitle}>Welcome Back </Text>
           <Text style={styles.heroSubtitle}>
@@ -161,7 +170,7 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.buttonBlock}>
-            <PrimaryButton title="Login" onPress={handleLogin} />
+            <PrimaryButton title={loading ? 'Logging in...' : 'Login'} onPress={handleLogin} disabled={loading} />
           </View>
 
           <TouchableOpacity

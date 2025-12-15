@@ -55,6 +55,16 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+router.get('/tenant-feed', async (req, res) => {
+  try {
+    const properties = await propertyService.listTenantVisibleProperties();
+    res.json(properties);
+  } catch (err) {
+    console.error('Error listing tenant feed properties', err);
+    res.status(500).json({ message: 'Failed to list properties' });
+  }
+});
+
 router.get('/:id', auth, async (req, res) => {
   try {
     const property = await propertyService.getPropertyById(req.user.userId, req.params.id);

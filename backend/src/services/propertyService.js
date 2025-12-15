@@ -21,6 +21,10 @@ async function listProperties(ownerId) {
   return Property.find({ ownerId }).sort({ createdAt: -1 });
 }
 
+async function listTenantVisibleProperties() {
+  return Property.find({ status: 'available' }).sort({ createdAt: -1 });
+}
+
 async function deleteProperty(ownerId, id) {
   return Property.findOneAndDelete({ _id: id, ownerId });
 }
@@ -30,5 +34,6 @@ module.exports = {
   updateProperty,
   getPropertyById,
   listProperties,
+  listTenantVisibleProperties,
   deleteProperty,
 };

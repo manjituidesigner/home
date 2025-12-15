@@ -26,6 +26,7 @@ const PropertySchema = new mongoose.Schema(
     customFloor: { type: String, trim: true },
     address: { type: String, trim: true },
     mapLocation: { type: String, trim: true },
+    visibleForTenants: { type: Boolean, default: false },
     // Financial details
     rentAmount: { type: String, trim: true },
     advanceAmount: { type: String, trim: true },

@@ -19,6 +19,10 @@ import TenentsScreen from './screens/TenentsScreen';
 import PaymentsScreen from './screens/PaymentsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import DocumentsScreen from './screens/DocumentsScreen';
+import OwnersScreen from './screens/OwnersScreen';
+import AgreementScreen from './screens/AgreementScreen';
+import ChatScreen from './screens/ChatScreen';
+import DocsScreen from './screens/DocsScreen';
 import AdsScreen from './screens/AdsScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
 import CustomDrawer from './components/CustomDrawer';
@@ -37,9 +41,13 @@ function MainDrawer() {
       <Drawer.Screen name="Property" component={PropertyScreen} />
       <Drawer.Screen name="Wishlist" component={WishlistScreen} />
       <Drawer.Screen name="Tenents" component={TenentsScreen} />
+      <Drawer.Screen name="Owners" component={OwnersScreen} />
       <Drawer.Screen name="Payments" component={PaymentsScreen} />
       <Drawer.Screen name="Settings" component={SettingsScreen} />
       <Drawer.Screen name="Documents" component={DocumentsScreen} />
+      <Drawer.Screen name="Docs" component={DocsScreen} />
+      <Drawer.Screen name="Agreement" component={AgreementScreen} />
+      <Drawer.Screen name="Chat" component={ChatScreen} />
       <Drawer.Screen name="Ads" component={AdsScreen} />
       <Drawer.Screen name="subscription" component={SubscriptionScreen} />
     </Drawer.Navigator>

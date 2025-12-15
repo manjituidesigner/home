@@ -9,10 +9,13 @@ import {
   Dimensions,
   Switch,
   Linking,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../theme';
 import PropertyImageSlider from '../components/PropertyImageSlider';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSessionUser } from '../session';
 
 const { width, height } = Dimensions.get('window');
 
@@ -37,6 +40,28 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   );
   const [openAmenities, setOpenAmenities] = useState(false);
   const [openRules, setOpenRules] = useState(false);
+
+  const roleFromParams = String(route?.params?.fromRole || '').trim().toLowerCase();
+  const sessionRole = String(getSessionUser()?.role || '').trim().toLowerCase();
+  const [storedRole, setStoredRole] = useState('');
+  const resolvedRole = roleFromParams || sessionRole || storedRole;
+  const isTenant = resolvedRole === 'tenant' || resolvedRole === 'tenent';
+
+  React.useEffect(() => {
+    let mounted = true;
+    const loadRole = async () => {
+      try {
+        const json = await AsyncStorage.getItem('USER_PROFILE');
+        const user = json ? JSON.parse(json) : null;
+        if (!mounted) return;
+        setStoredRole(String(user?.role || '').trim().toLowerCase());
+      } catch (e) {}
+    };
+    loadRole();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const photos = Array.isArray(property.photos) ? property.photos : [];
 
@@ -96,6 +121,24 @@ export default function PropertyDetailsScreen({ route, navigation }) {
     Linking.openURL(targetUrl).catch(() => {});
   };
 
+  const handleCall = () => {
+    const phone = String(property.contactPhone || property.phone || property.ownerPhone || '').trim();
+    if (!phone) {
+      Alert.alert('Call', 'Phone number not available for this property.');
+      return;
+    }
+    const url = `tel:${phone}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
+  const handleChat = () => {
+    navigation.navigate('Main', { screen: 'Chat' });
+  };
+
+  const handleMakeOffer = () => {
+    Alert.alert('Make Offer', 'Offer request sent.');
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -135,17 +178,19 @@ export default function PropertyDetailsScreen({ route, navigation }) {
                 </TouchableOpacity>
               </>
             )}
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() =>
-                navigation.navigate('Main', {
-                  screen: 'Property',
-                  params: { editFromDetails: property },
-                })
-              }
-            >
-              <Ionicons name="pencil" size={18} color="#2b2b2b" />
-            </TouchableOpacity>
+            {!isTenant && (
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() =>
+                  navigation.navigate('Main', {
+                    screen: 'Property',
+                    params: { editFromDetails: property },
+                  })
+                }
+              >
+                <Ionicons name="pencil" size={18} color="#2b2b2b" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => navigation.goBack()}
@@ -238,36 +283,38 @@ export default function PropertyDetailsScreen({ route, navigation }) {
 
           {/* Section: Rent & Availability */}
           <View style={styles.infoCard}>
-            {/* Availability */}
-            <View style={styles.infoRow}>
-              <View style={styles.roundIconRed}>
-                <MaterialCommunityIcons
-                  name="home-city"
-                  size={20}
-                  color="#fff"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.infoTitle}>
-                  {isAvailable ? 'Open' : 'Closed'}
-                </Text>
-                <Text style={styles.infoSub}>
-                  {isAvailable
-                    ? 'Property is visible for tenants'
-                    : 'Temporarily unavailable'}
-                </Text>
-              </View>
-              <Switch
-                value={isAvailable}
-                onValueChange={setIsAvailable}
-                trackColor={{ true: '#A7E3C4', false: '#e6e6e6' }}
-                thumbColor={isAvailable ? '#12a454' : '#ffffff'}
-              />
-            </View>
+            {!isTenant && (
+              <>
+                <View style={styles.infoRow}>
+                  <View style={styles.roundIconRed}>
+                    <MaterialCommunityIcons
+                      name="home-city"
+                      size={20}
+                      color="#fff"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.infoTitle}>
+                      {isAvailable ? 'Open' : 'Closed'}
+                    </Text>
+                    <Text style={styles.infoSub}>
+                      {isAvailable
+                        ? 'Property is visible for tenants'
+                        : 'Temporarily unavailable'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isAvailable}
+                    onValueChange={setIsAvailable}
+                    trackColor={{ true: '#A7E3C4', false: '#e6e6e6' }}
+                    thumbColor={isAvailable ? '#12a454' : '#ffffff'}
+                  />
+                </View>
 
-            <View style={styles.divider} />
+                <View style={styles.divider} />
+              </>
+            )}
 
-            {/* Rent & charges card header */}
             <View style={styles.infoRow}>
               <View style={styles.roundIconBlue}>
                 <MaterialCommunityIcons
@@ -347,11 +394,25 @@ export default function PropertyDetailsScreen({ route, navigation }) {
           <View style={{ height: 90 }} />
         </ScrollView>
 
-        {/* Bottom fixed button */}
+        {/* Bottom fixed actions */}
         <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.primaryBtn}>
-            <Text style={styles.primaryBtnText}>Manage Property</Text>
-          </TouchableOpacity>
+          {isTenant ? (
+            <View style={styles.tenantActionsRow}>
+              <TouchableOpacity style={styles.tenantBtn} onPress={handleCall}>
+                <Text style={styles.tenantBtnText}>Call</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.tenantBtn} onPress={handleChat}>
+                <Text style={styles.tenantBtnText}>Chat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.tenantBtnPrimary} onPress={handleMakeOffer}>
+                <Text style={styles.tenantBtnPrimaryText}>Make Offer</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.primaryBtn}>
+              <Text style={styles.primaryBtnText}>Manage Property</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -558,10 +619,48 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     position: 'absolute',
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 12,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 0.5,
+    borderTopColor: '#e6eaf2',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  tenantActionsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tenantBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    marginRight: 10,
+  },
+  tenantBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  tenantBtnPrimary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tenantBtnPrimaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   primaryBtn: {
     width: width - 32,
