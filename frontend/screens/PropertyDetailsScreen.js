@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   ScrollView,
   Dimensions,
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../theme';
+import PropertyImageSlider from '../components/PropertyImageSlider';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,7 +39,6 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   const [openRules, setOpenRules] = useState(false);
 
   const photos = Array.isArray(property.photos) ? property.photos : [];
-  const coverPhoto = photos.length ? photos[0] : null;
 
   const title = property.propertyName || 'Property details';
   const address = property.address || property.floor || property.customFloor || '';
@@ -162,22 +161,15 @@ export default function PropertyDetailsScreen({ route, navigation }) {
         >
           {/* Main image */}
           <View style={styles.imageCard}>
-            {coverPhoto ? (
-              <Image
-                source={{ uri: coverPhoto }}
-                style={styles.image}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Ionicons
-                  name="image-outline"
-                  size={40}
-                  color={theme.colors.textSecondary}
-                />
-                <Text style={styles.imagePlaceholderText}>No image</Text>
-              </View>
-            )}
+            <PropertyImageSlider
+              photos={photos}
+              maxImages={5}
+              autoSlide
+              autoSlideIntervalMs={3000}
+              height={Math.round(height * 0.32)}
+              borderRadius={12}
+              showThumbnails
+            />
           </View>
 
           {/* Title row + status */}
@@ -416,19 +408,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#dfe9f3',
     marginBottom: 12,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  imagePlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imagePlaceholderText: {
-    marginTop: 8,
-    color: theme.colors.textSecondary,
   },
   titleRow: {
     flexDirection: 'row',

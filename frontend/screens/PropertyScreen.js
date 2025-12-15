@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
+import PropertyImageSlider from '../components/PropertyImageSlider';
 
 const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
 const RENDER_BASE_URL = 'https://home-backend-zc1d.onrender.com';
@@ -1516,10 +1517,7 @@ export default function PropertyScreen({ navigation, route }) {
               const isOpen = derivedStatus === 'available';
               const isOccupied = !isOpen;
 
-              const coverPhoto =
-                Array.isArray(item.photos) && item.photos.length
-                  ? item.photos[0]
-                  : null;
+              const photos = Array.isArray(item.photos) ? item.photos : [];
 
               const typeLabel =
                 item.category === 'house'
@@ -1548,15 +1546,17 @@ export default function PropertyScreen({ navigation, route }) {
                   ]}
                 >
                   {/* Image wrapper */}
-                  {coverPhoto ? (
-                    <View style={styles.propertyImageWrapper}>
-                      <Image
-                        source={{ uri: coverPhoto }}
-                        style={styles.propertyCoverImage}
-                        resizeMode="cover"
-                      />
-                    </View>
-                  ) : null}
+                  <View style={styles.propertyImageWrapper}>
+                    <PropertyImageSlider
+                      photos={photos}
+                      maxImages={5}
+                      autoSlide
+                      autoSlideIntervalMs={2500}
+                      height={170}
+                      borderRadius={0}
+                      showThumbnails
+                    />
+                  </View>
 
                   {/* Content */}
                   <View style={styles.propertyCardBody}>
@@ -2063,10 +2063,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 170,
     backgroundColor: '#e6eef8',
-  },
-  propertyCoverImage: {
-    width: '100%',
-    height: '100%',
   },
   propertyCardBody: {
     padding: theme.spacing.md,
