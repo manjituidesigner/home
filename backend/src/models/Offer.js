@@ -19,4 +19,7 @@ const OfferSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+OfferSchema.index({ ownerId: 1, propertyId: 1, createdAt: -1 });
+OfferSchema.index({ tenantId: 1, propertyId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Offer', OfferSchema);

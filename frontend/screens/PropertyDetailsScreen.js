@@ -219,29 +219,32 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   };
 
   const handleMakeOffer = () => {
-    setOfferOpen(true);
+    navigation.navigate('MakeOffer', { property });
   };
 
   const submitOffer = async () => {
+    console.log('[submitOffer] clicked');
     if (submittingOffer) return;
 
     const offerRent = parseMoney(offerData.offerRent);
     if (offerRent == null || offerRent <= 0) {
+      console.log('[submitOffer] validation failed: offerRent', offerData.offerRent);
       Alert.alert('Offer', 'Please enter a valid offer price.');
       return;
     }
     if (!String(offerData.joiningDateEstimate || '').trim()) {
+      console.log('[submitOffer] validation failed: joiningDateEstimate', offerData.joiningDateEstimate);
       Alert.alert('Offer', 'Please enter joining date estimate.');
       return;
     }
     if (rulesSummary.length && !offerData.acceptsRules) {
+      console.log('[submitOffer] validation failed: acceptsRules false');
       Alert.alert('Offer', 'Please accept the owner rules / conditions.');
       return;
     }
 
     const payload = {
       propertyId: property?._id,
-      ownerId: property?.ownerId || property?.userId || property?.createdBy,
       offer: {
         offerRent,
         joiningDateEstimate: String(offerData.joiningDateEstimate || '').trim(),
@@ -258,6 +261,12 @@ export default function PropertyDetailsScreen({ route, navigation }) {
     try {
       setSubmittingOffer(true);
       const authHeaders = await getAuthHeaders();
+      console.log('[submitOffer] API_BASE_URL:', API_BASE_URL);
+      console.log('[submitOffer] has auth header:', !!authHeaders?.Authorization);
+      if (!authHeaders?.Authorization) {
+        Alert.alert('Session', 'Please login again. Token missing.');
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/api/offers`, {
         method: 'POST',
         headers: {
@@ -266,6 +275,13 @@ export default function PropertyDetailsScreen({ route, navigation }) {
         },
         body: JSON.stringify(payload),
       });
+
+      try {
+        const clone = response.clone();
+        const text = await clone.text();
+        console.log('[submitOffer] status:', response.status);
+        console.log('[submitOffer] response:', text);
+      } catch (e) {}
 
       if (!response.ok) {
         let msg = 'Failed to submit offer.';

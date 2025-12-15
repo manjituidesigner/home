@@ -27,6 +27,7 @@ const API_BASE_URL =
 
 export default function ProfileScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(true);
+  const [sessionUserId, setSessionUserId] = useState(null);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
@@ -158,6 +159,8 @@ export default function ProfileScreen({ navigation }) {
         if (!res.ok || !data?.user) return;
 
         const user = data.user;
+        const uid = user?._id || user?.id || null;
+        setSessionUserId(uid);
 
         const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
         const email = user.email || '';
@@ -312,8 +315,20 @@ export default function ProfileScreen({ navigation }) {
 
   const handleSave = async () => {
     try {
+      if (!canSave()) {
+        const list = computeMissingFields(formData);
+        Alert.alert(
+          'Complete Profile',
+          list.length ? `Please complete: ${list.join(', ')}` : 'Please complete your profile to save.',
+        );
+        return;
+      }
       setLoading(true);
       const authHeaders = await getAuthHeaders();
+      if (!authHeaders.Authorization) {
+        Alert.alert('Session', 'Please login again.');
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/api/users/me`, {
         method: 'PUT',
         headers: {
@@ -332,11 +347,10 @@ export default function ProfileScreen({ navigation }) {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        Alert.alert('Error', data?.message || 'Failed to save profile.');
+        Alert.alert('Error', data?.message || `Failed to save profile (HTTP ${response.status}).`);
         return;
       }
 
-      setIsEditing(false);
       const completion = calculateCompletion(formData);
       if (completion === 100) {
         Alert.alert('Success', 'Profile 100% completed. You can access all pages now.');
@@ -345,11 +359,14 @@ export default function ProfileScreen({ navigation }) {
       }
 
       await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({
-        ...formData,
-        profileImage,
-        profileImageDataUrl,
-        sameAsCurrent,
-        additionalAddresses,
+        userId: sessionUserId || data?.user?._id || data?.user?.id || null,
+        data: {
+          ...formData,
+          profileImage,
+          profileImageDataUrl,
+          sameAsCurrent,
+          additionalAddresses,
+        },
       }));
 
       if (data?.user) {
@@ -359,6 +376,26 @@ export default function ProfileScreen({ navigation }) {
           isProfileComplete: calculateCompletion(formData) === 100,
         };
         await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedUser));
+
+        try {
+          const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: {
+              'Content-Type': 'application/json',
+              ...authHeaders,
+            },
+          });
+          const meData = await meRes.json().catch(() => ({}));
+          if (meRes.ok && meData?.user) {
+            const syncedUser = {
+              ...meData.user,
+              profileCompletionPercent: calculateCompletion(formData),
+              isProfileComplete: calculateCompletion(formData) === 100,
+            };
+            await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(syncedUser));
+          }
+        } catch (e) {
+          // ignore
+        }
 
         if (String(data.user.profileImageUrl || '').trim()) {
           setLockedProfile((prev) => ({
@@ -611,26 +648,31 @@ export default function ProfileScreen({ navigation }) {
         const jsonValue = await AsyncStorage.getItem(PROFILE_STORAGE_KEY);
         if (jsonValue) {
           const savedProfile = JSON.parse(jsonValue);
+          const savedUserId = savedProfile?.userId || null;
+          const savedData = savedProfile?.data || savedProfile;
+          if (savedUserId && sessionUserId && String(savedUserId) !== String(sessionUserId)) {
+            return;
+          }
           setFormData(prev => ({
             ...prev,
-            ...savedProfile,
+            ...savedData,
             currentAddress: {
               ...prev.currentAddress,
-              ...savedProfile.currentAddress,
+              ...savedData.currentAddress,
             },
             permanentAddress: {
               ...prev.permanentAddress,
-              ...savedProfile.permanentAddress,
+              ...savedData.permanentAddress,
             },
           }));
-          if (savedProfile.profileImage) {
-            setProfileImage(savedProfile.profileImage);
+          if (savedData.profileImage) {
+            setProfileImage(savedData.profileImage);
           }
-          if (typeof savedProfile.sameAsCurrent === 'boolean') {
-            setSameAsCurrent(savedProfile.sameAsCurrent);
+          if (typeof savedData.sameAsCurrent === 'boolean') {
+            setSameAsCurrent(savedData.sameAsCurrent);
           }
-          if (Array.isArray(savedProfile.additionalAddresses)) {
-            setAdditionalAddresses(savedProfile.additionalAddresses);
+          if (Array.isArray(savedData.additionalAddresses)) {
+            setAdditionalAddresses(savedData.additionalAddresses);
           }
         }
       } catch (e) {
@@ -639,7 +681,7 @@ export default function ProfileScreen({ navigation }) {
     };
 
     loadSavedData();
-  }, [hasLoadedBackendProfile]);
+  }, [hasLoadedBackendProfile, sessionUserId]);
 
   return (
     <ScreenLayout
@@ -1008,6 +1050,30 @@ export default function ProfileScreen({ navigation }) {
             </View>
           </View>
         </ScrollView>
+        {isEditing && (
+          <View style={styles.bottomBar}>
+            <TouchableOpacity
+              style={[styles.bottomButton, styles.bottomCancelButton]}
+              onPress={() => setIsEditing(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.bottomButtonText, styles.bottomCancelText]}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.bottomButton,
+                styles.bottomUpdateButton,
+                !canSave() ? styles.bottomUpdateButtonDisabled : null,
+              ]}
+              onPress={handleUpdate}
+              disabled={!canSave()}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.bottomButtonText}>Save Profile</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <LoadingOverlay visible={loading} />
       </View>
     </ScreenLayout>
@@ -1291,6 +1357,17 @@ const styles = StyleSheet.create({
   },
   bottomUpdateButton: {
     backgroundColor: '#111827',
+  },
+  bottomUpdateButtonDisabled: {
+    opacity: 0.5,
+  },
+  bottomButtonText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  bottomCancelText: {
+    color: '#111827',
   },
   buttonContainer: {
     flexDirection: 'row',

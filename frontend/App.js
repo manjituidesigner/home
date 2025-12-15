@@ -26,6 +26,8 @@ import ChatScreen from './screens/ChatScreen';
 import DocsScreen from './screens/DocsScreen';
 import AdsScreen from './screens/AdsScreen';
 import SubscriptionScreen from './screens/SubscriptionScreen';
+import MakeOfferScreen from './screens/MakeOfferScreen';
+import OwnerOfferDetailsScreen from './screens/OwnerOfferDetailsScreen';
 import CustomDrawer from './components/CustomDrawer';
 
 const Stack = createNativeStackNavigator();
@@ -70,6 +72,8 @@ export default function App() {
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Main" component={MainDrawer} />
         <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
+        <Stack.Screen name="MakeOffer" component={MakeOfferScreen} />
+        <Stack.Screen name="OwnerOfferDetails" component={OwnerOfferDetailsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

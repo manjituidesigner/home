@@ -6,6 +6,10 @@ import theme from '../theme';
 import { getSessionUser, clearSession } from '../session';
 
 const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
+const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
+const WISHLIST_STORAGE_KEY = 'WISHLIST_PROPERTIES';
+const OFFER_SUBMISSIONS_KEY = 'OFFER_SUBMISSIONS_V1';
 
 function normalizeRole(role) {
   const r = String(role || '').trim().toLowerCase();
@@ -62,6 +66,7 @@ export default function CustomDrawer(props) {
         { key: 'Dashboard', label: 'Dashboard', icon: '\u25a2' },
         { key: 'Profile', label: 'Profile', icon: '\ud83d\udc64' },
         { key: 'Wishlist', label: 'Wishlist', icon: '\u2764' },
+        { key: 'Offers', label: 'Offers', icon: '\ud83d\udce9' },
         { key: 'Owners', label: 'Owners', icon: '\ud83e\udd1d' },
         { key: 'Payments', label: 'Payment', icon: '\ud83d\udcb3' },
         { key: 'Settings', label: 'Settings', icon: '\u2699' },
@@ -137,6 +142,13 @@ export default function CustomDrawer(props) {
   const handleLogout = () => {
     navigation.closeDrawer();
     clearSession();
+    AsyncStorage.multiRemove([
+      AUTH_TOKEN_STORAGE_KEY,
+      USER_PROFILE_STORAGE_KEY,
+      PROFILE_STORAGE_KEY,
+      WISHLIST_STORAGE_KEY,
+      OFFER_SUBMISSIONS_KEY,
+    ]).catch(() => {});
     const parent = navigation.getParent();
     if (parent) {
       parent.reset({

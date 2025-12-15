@@ -184,6 +184,16 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.hint}>
             Use your registered username and password.
           </Text>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('CreateAccount')}
+            activeOpacity={0.8}
+            style={styles.createAccountLink}
+          >
+            <Text style={styles.createAccountText}>
+              Dont have an account? <Text style={styles.createAccountStrong}>Create Account</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </ScreenLayout>
@@ -278,6 +288,19 @@ const styles = StyleSheet.create({
   forgotText: {
     fontSize: 13,
     fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  createAccountLink: {
+    marginTop: theme.spacing.md,
+    alignItems: 'center',
+  },
+  createAccountText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  createAccountStrong: {
+    fontWeight: '900',
     color: theme.colors.primary,
   },
 });

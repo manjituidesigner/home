@@ -16,7 +16,22 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/home_app';
 
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      const allowlist = [
+        'http://localhost:8081',
+        'http://127.0.0.1:8081',
+        'http://localhost:19006',
+        'http://127.0.0.1:19006',
+      ];
+      if (!origin) return callback(null, true);
+      if (allowlist.includes(origin)) return callback(null, true);
+      return callback(null, false);
+    },
+    credentials: true,
+  }),
+);
 // Allow larger JSON bodies so base64-encoded photos can be sent from the app
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
