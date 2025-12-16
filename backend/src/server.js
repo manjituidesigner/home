@@ -1,6 +1,6 @@
 const path = require('path');
 const express = require('express');
-const cors = require('cors');
+require("dotenv").config();
 const dotenv = require('dotenv');
 
 // Load environment variables *before* importing routes that depend on them
@@ -16,7 +16,7 @@ const rentRoutes = require('./routes/rentRoutes');
 const agreementRoutes = require('./routes/agreementRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/home_app';
 
 const CORS_ALLOW_ALL = String(process.env.CORS_ALLOW_ALL || '').toLowerCase() === 'true';
