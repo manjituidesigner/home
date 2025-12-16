@@ -13,6 +13,7 @@ const userRoutes = require('./routes/userRoutes');
 const offerRoutes = require('./routes/offerRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const rentRoutes = require('./routes/rentRoutes');
+const agreementRoutes = require('./routes/agreementRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -57,6 +58,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/rents', rentRoutes);
+app.use('/api/agreements', agreementRoutes);
 
 mongoose
   .connect(MONGODB_URI, {

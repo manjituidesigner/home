@@ -204,10 +204,22 @@ router.get('/incoming', auth, async (req, res) => {
     const ownerId = req.user?.userId;
     if (!ownerId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const list = await PaymentTransaction.find({ ownerId })
+    const { paymentType, ownerVerified, status } = req.query || {};
+    const filter = { ownerId };
+
+    if (paymentType) filter.paymentType = String(paymentType).trim().toLowerCase();
+    if (ownerVerified != null && String(ownerVerified).trim() !== '') {
+      const v = String(ownerVerified).trim().toLowerCase();
+      if (v === 'true' || v === '1') filter.ownerVerified = true;
+      if (v === 'false' || v === '0') filter.ownerVerified = false;
+    }
+    if (status) filter.status = String(status).trim().toLowerCase();
+
+    const list = await PaymentTransaction.find(filter)
       .sort({ createdAt: -1 })
       .populate('propertyId', 'propertyName address city')
-      .populate('tenantId', 'firstName lastName username');
+      .populate('tenantId', 'firstName lastName username phone email currentAddress')
+      .populate('offerId');
 
     return res.json({ success: true, count: list.length, payments: list });
   } catch (e) {
@@ -243,6 +255,12 @@ router.patch('/:transactionId/verify', auth, async (req, res) => {
             const dueDay = joinDate.getDate();
 
             if (String(tx.paymentType || '').toLowerCase() === 'booking') {
+              try {
+                offer.bookingVerified = true;
+                offer.bookingVerifiedAt = tx.ownerVerifiedAt || new Date();
+                await offer.save();
+              } catch (e) {}
+
               const now = new Date();
               const rentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 

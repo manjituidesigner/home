@@ -20,6 +20,9 @@ const OfferSchema = new mongoose.Schema(
     requestedAdvanceValidityDays: { type: Number },
     proposedMeetingTime: { type: Date },
     desiredJoiningDate: { type: Date },
+
+    bookingVerified: { type: Boolean, default: false, index: true },
+    bookingVerifiedAt: { type: Date },
   },
   { timestamps: true }
 );
