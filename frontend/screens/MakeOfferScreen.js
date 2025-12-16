@@ -9,6 +9,8 @@ import {
   TextInput,
   Image,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -16,6 +18,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../theme';
 import { getSessionUser } from '../session';
 
+const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
+const RENDER_BASE_URL = 'https://home-backend-zc1d.onrender.com';
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const OFFER_SUBMISSIONS_KEY = 'OFFER_SUBMISSIONS_V1';
 
 function moneyLabel(v, fallback = '-') {
@@ -135,6 +142,16 @@ export default function MakeOfferScreen({ route, navigation }) {
   }, []);
 
   const propertyId = property?._id || property?.id || property?.propertyId || null;
+
+  const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const parseMoney = (v) => {
+    const n = Number(String(v || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) ? n : null;
+  };
 
   const title = property.propertyName || 'Property';
   const address = property.address || property.floor || property.customFloor || '';
@@ -259,6 +276,9 @@ export default function MakeOfferScreen({ route, navigation }) {
   const [offerAdvance, setOfferAdvance] = useState(property.advanceAmount ? String(property.advanceAmount) : '');
   const [offerBooking, setOfferBooking] = useState(property.bookingAdvance ? String(property.bookingAdvance) : '');
 
+  const [joiningDateEstimate, setJoiningDateEstimate] = useState('');
+  const [acceptsRules, setAcceptsRules] = useState(false);
+
   const [prefDrinks, setPrefDrinks] = useState(false);
   const [prefLateEntry, setPrefLateEntry] = useState(false);
   const [prefBikeParking, setPrefBikeParking] = useState(false);
@@ -311,6 +331,10 @@ export default function MakeOfferScreen({ route, navigation }) {
   }, [propertyId, sessionUserId, route?.params?.userId]);
 
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [successVisible, setSuccessVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [resubmitConfirmVisible, setResubmitConfirmVisible] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -333,47 +357,177 @@ export default function MakeOfferScreen({ route, navigation }) {
     };
   }, [submissionKey]);
 
+  const submitOffer = async (isResubmit = false) => {
+    setSubmitting(true);
+    try {
+      if (!propertyId) {
+        Alert.alert('Offer', 'Property not found. Please open property again.');
+        return;
+      }
+
+      const authHeaders = await getAuthHeaders();
+      if (!authHeaders?.Authorization) {
+        Alert.alert('Session', 'Please login again. Token missing.');
+        return;
+      }
+
+      const offerRent = parseMoney(offerPrice);
+      if (offerRent == null || offerRent <= 0) {
+        Alert.alert('Offer', 'Please enter a valid offer price.');
+        return;
+      }
+
+      const payload = {
+        propertyId,
+        offer: {
+          offerRent,
+          joiningDateEstimate: String(joiningDateEstimate || '').trim(),
+          offerAdvance: parseMoney(offerAdvance),
+          offerBookingAmount: parseMoney(offerBooking),
+          needsBikeParking: !!prefBikeParking,
+          needsCarParking: false,
+          tenantType: String(tenantGroup || '').trim(),
+          acceptsRules: true,
+          matchPercent: Number(matchPercent) || 0,
+        },
+      };
+
+      const resp = await fetch(`${API_BASE_URL}/api/offers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        let msg = 'Failed to submit offer.';
+        try {
+          const data = await resp.json();
+          msg = String(data?.message || data?.error || msg);
+        } catch (e) {}
+        Alert.alert('Offer', msg);
+        return;
+      }
+
+      const json = await AsyncStorage.getItem(OFFER_SUBMISSIONS_KEY);
+      const map = json ? JSON.parse(json) : {};
+      const safe = map && typeof map === 'object' ? map : {};
+      const uid = String(submissionKey.split('::')[0] || '');
+      const next = { ...safe };
+      if (!next.byUser || typeof next.byUser !== 'object') next.byUser = {};
+      if (!next.byUser[uid] || typeof next.byUser[uid] !== 'object') next.byUser[uid] = {};
+      next.byUser[uid][submissionKey] = {
+        submittedAt: Date.now(),
+        offer: {
+          offerPrice: String(offerPrice || '').trim(),
+          offerAdvance: String(offerAdvance || '').trim(),
+          offerBooking: String(offerBooking || '').trim(),
+          joiningDateEstimate: String(joiningDateEstimate || '').trim(),
+          tenantPreferences: {
+            drinksOrSmoking: !!prefDrinks,
+            lateNightEntry: !!prefLateEntry,
+            bikeParking: !!prefBikeParking,
+            friendsOrVisitors: !!prefFriends,
+            familyStaying: !!prefFamily,
+            tenantGroup,
+          },
+        },
+        dealSnapshot: dealDetails,
+      };
+      await AsyncStorage.setItem(OFFER_SUBMISSIONS_KEY, JSON.stringify(next));
+      setAlreadySubmitted(true);
+      setSuccessMessage(isResubmit ? 'Offer resubmitted successfully.' : 'Offer submitted successfully.');
+      setSuccessVisible(true);
+    } catch (e) {
+      Alert.alert('Offer', 'Network error while submitting offer.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = () => {
-    if (alreadySubmitted) return;
+    if (submitting) return;
     if (!String(offerPrice || '').trim()) {
       Alert.alert('Offer', 'Please enter offer price.');
       return;
     }
-    (async () => {
-      try {
-        const json = await AsyncStorage.getItem(OFFER_SUBMISSIONS_KEY);
-        const map = json ? JSON.parse(json) : {};
-        const safe = map && typeof map === 'object' ? map : {};
-        const uid = String(submissionKey.split('::')[0] || '');
-        const next = { ...safe };
-        if (!next.byUser || typeof next.byUser !== 'object') next.byUser = {};
-        if (!next.byUser[uid] || typeof next.byUser[uid] !== 'object') next.byUser[uid] = {};
-        next.byUser[uid][submissionKey] = {
-          submittedAt: Date.now(),
-          offer: {
-            offerPrice: String(offerPrice || '').trim(),
-            offerAdvance: String(offerAdvance || '').trim(),
-            offerBooking: String(offerBooking || '').trim(),
-            tenantPreferences: {
-              drinksOrSmoking: !!prefDrinks,
-              lateNightEntry: !!prefLateEntry,
-              bikeParking: !!prefBikeParking,
-              friendsOrVisitors: !!prefFriends,
-              familyStaying: !!prefFamily,
-              tenantGroup,
-            },
-          },
-          dealSnapshot: dealDetails,
-        };
-        await AsyncStorage.setItem(OFFER_SUBMISSIONS_KEY, JSON.stringify(next));
-        setAlreadySubmitted(true);
-      } catch (e) {}
-      Alert.alert('Offer', 'Offer submitted (static screen for now).');
-    })();
+    if (!String(joiningDateEstimate || '').trim()) {
+      Alert.alert('Offer', 'Please enter joining date estimate.');
+      return;
+    }
+    if (!acceptsRules) {
+      Alert.alert('Offer', 'Please accept owner rules / conditions.');
+      return;
+    }
+    if (alreadySubmitted) {
+      setResubmitConfirmVisible(true);
+      return;
+    }
+
+    submitOffer(false);
   };
 
   return (
     <SafeAreaView style={styles.safe}>
+      <Modal
+        visible={resubmitConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setResubmitConfirmVisible(false)}
+      >
+        <View style={styles.successOverlay}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Resubmit Offer?</Text>
+            <Text style={styles.confirmSubtitle}>You already submitted an offer for this property.</Text>
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                activeOpacity={0.9}
+                onPress={() => setResubmitConfirmVisible(false)}
+                disabled={submitting}
+              >
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmResubmitBtn}
+                activeOpacity={0.9}
+                onPress={() => {
+                  setResubmitConfirmVisible(false);
+                  submitOffer(true);
+                }}
+                disabled={submitting}
+              >
+                <Text style={styles.confirmResubmitText}>Resubmit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={successVisible} transparent animationType="fade" onRequestClose={() => setSuccessVisible(false)}>
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <View style={styles.successIconWrap}>
+              <Ionicons name="checkmark-circle" size={44} color={theme.colors.primary} />
+            </View>
+            <Text style={styles.successTitle}>Successful</Text>
+            <Text style={styles.successSubtitle}>{successMessage || 'Offer submitted successfully.'}</Text>
+            <TouchableOpacity
+              style={styles.successOkBtn}
+              activeOpacity={0.9}
+              onPress={() => {
+                setSuccessVisible(false);
+                if (navigation?.goBack) navigation.goBack();
+              }}
+            >
+              <Text style={styles.successOkBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.text} />
@@ -496,6 +650,16 @@ export default function MakeOfferScreen({ route, navigation }) {
               <Text style={styles.moneySuffix}>/mo</Text>
             </View>
 
+            <Text style={[styles.label, { marginTop: 12 }]}>Joining date estimate</Text>
+            <View style={styles.moneyInputWrap}>
+              <TextInput
+                value={joiningDateEstimate}
+                onChangeText={setJoiningDateEstimate}
+                placeholder="e.g. 10 Jan 2026"
+                style={[styles.moneyInput, { paddingLeft: 0 }]}
+              />
+            </View>
+
             {expectedRentInfo ? (
               <View style={styles.infoRow}>
                 <Ionicons name="information-circle" size={16} color={theme.colors.textSecondary} />
@@ -576,6 +740,13 @@ export default function MakeOfferScreen({ route, navigation }) {
               subtitle="Family members will stay with me"
               value={prefFamily}
               onToggle={() => setPrefFamily((v) => !v)}
+            />
+
+            <CheckboxRow
+              title="I accept owner rules & conditions"
+              subtitle="Required to submit offer"
+              value={acceptsRules}
+              onToggle={() => setAcceptsRules((v) => !v)}
             />
           </View>
 
@@ -699,15 +870,15 @@ export default function MakeOfferScreen({ route, navigation }) {
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.submitBtn, alreadySubmitted ? styles.submitBtnDisabled : null]}
+            style={[styles.submitBtn, submitting ? styles.submitBtnDisabled : null]}
             onPress={handleSubmit}
             activeOpacity={0.9}
-            disabled={alreadySubmitted}
+            disabled={submitting}
           >
             <Text style={styles.submitBtnText}>
-              {alreadySubmitted ? 'Already submitted' : 'Submit Offer'}
+              {submitting ? 'Submitting...' : alreadySubmitted ? 'Resubmit Offer' : 'Submit Offer'}
             </Text>
-            {!alreadySubmitted && <Ionicons name="send" size={16} color="#ffffff" />}
+            {!submitting && <Ionicons name="send" size={16} color="#ffffff" />}
           </TouchableOpacity>
         </View>
       </View>
@@ -1200,6 +1371,105 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontSize: 14,
     fontWeight: '900',
+    color: '#ffffff',
+  },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17,24,39,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+  },
+  successCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  successIconWrap: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  successTitle: {
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.colors.text,
+  },
+  successSubtitle: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+  },
+  successOkBtn: {
+    marginTop: 14,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successOkBtnText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  confirmTitle: {
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.colors.text,
+  },
+  confirmSubtitle: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+  },
+  confirmBtnRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelText: {
+    fontWeight: '900',
+    fontSize: 14,
+    color: '#111827',
+  },
+  confirmResubmitBtn: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmResubmitText: {
+    fontWeight: '900',
+    fontSize: 14,
     color: '#ffffff',
   },
 });

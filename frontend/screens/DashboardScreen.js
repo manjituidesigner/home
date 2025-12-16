@@ -112,6 +112,7 @@ export default function DashboardScreen({ navigation }) {
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [wishlistIds, setWishlistIds] = useState([]);
   const [offerSubmittedKeys, setOfferSubmittedKeys] = useState({});
+  const [ownerRequestByPropertyId, setOwnerRequestByPropertyId] = useState({});
 
   const normalizedRole = useMemo(() => normalizeRole(role), [role]);
 
@@ -125,6 +126,50 @@ export default function DashboardScreen({ navigation }) {
       setWishlistIds(ids);
     } catch (e) {
       setWishlistIds([]);
+    }
+  };
+
+  const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const loadOwnerRequestsForTenant = async () => {
+    if (normalizedRole !== 'tenant') return;
+    try {
+      const authHeaders = await getAuthHeaders();
+      if (!authHeaders?.Authorization) {
+        setOwnerRequestByPropertyId({});
+        return;
+      }
+
+      const resp = await fetch(`${API_BASE_URL}/api/offers/sent`, {
+        headers: {
+          ...authHeaders,
+        },
+      });
+
+      if (!resp.ok) {
+        setOwnerRequestByPropertyId({});
+        return;
+      }
+
+      const data = await resp.json().catch(() => ({}));
+      const offers = Array.isArray(data?.offers) ? data.offers : [];
+      const map = {};
+      for (const o of offers) {
+        const action = String(o?.actionType || '').toLowerCase();
+        const status = String(o?.status || '').toLowerCase();
+        const pid = String(o?.propertyId?._id || o?.propertyId || '');
+        if (!pid) continue;
+        if (status === 'rejected' || status === 'on_hold') continue;
+        if (action === 'advance_requested') {
+          map[pid] = true;
+        }
+      }
+      setOwnerRequestByPropertyId(map);
+    } catch (e) {
+      setOwnerRequestByPropertyId({});
     }
   };
 
@@ -211,10 +256,12 @@ export default function DashboardScreen({ navigation }) {
   useEffect(() => {
     loadWishlist();
     loadOfferSubmitted();
+    loadOwnerRequestsForTenant();
     const unsub = navigation?.addListener
       ? navigation.addListener('focus', () => {
           loadWishlist();
           loadOfferSubmitted();
+          loadOwnerRequestsForTenant();
         })
       : null;
     return () => {
@@ -283,6 +330,7 @@ export default function DashboardScreen({ navigation }) {
                 const offerKey = `${uid}::${pid}`;
                 const raw = offerSubmittedKeys?.[offerKey];
                 const offerSubmitted = !!raw;
+                const requestFromOwner = !!ownerRequestByPropertyId?.[pid];
 
                 return (
                   <View key={item._id || String(index)} style={styles.card}>
@@ -300,6 +348,17 @@ export default function DashboardScreen({ navigation }) {
                         <View style={styles.offerSubmittedBadge}>
                           <Ionicons name="checkmark-circle" size={14} color="#ffffff" />
                           <Text style={styles.offerSubmittedBadgeText}>Offer submitted</Text>
+                        </View>
+                      )}
+                      {requestFromOwner && (
+                        <View
+                          style={[
+                            styles.ownerRequestBadge,
+                            offerSubmitted ? styles.ownerRequestBadgeWithOfferSubmitted : null,
+                          ]}
+                        >
+                          <Ionicons name="mail-unread-outline" size={14} color="#ffffff" />
+                          <Text style={styles.ownerRequestBadgeText}>Request from Owner</Text>
                         </View>
                       )}
                       <TouchableOpacity
@@ -1281,6 +1340,28 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.65)',
   },
   offerSubmittedBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  ownerRequestBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(59,130,246,0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.65)',
+  },
+  ownerRequestBadgeWithOfferSubmitted: {
+    top: 44,
+  },
+  ownerRequestBadgeText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#ffffff',

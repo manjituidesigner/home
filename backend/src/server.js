@@ -11,6 +11,8 @@ const propertyRoutes = require('./routes/propertyRoutes');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const offerRoutes = require('./routes/offerRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const rentRoutes = require('./routes/rentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -53,6 +55,8 @@ app.use('/api/properties', propertyRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/rents', rentRoutes);
 
 mongoose
   .connect(MONGODB_URI, {

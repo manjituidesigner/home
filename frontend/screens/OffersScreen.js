@@ -19,6 +19,61 @@ export default function OffersScreen({ navigation }) {
   const [role, setRole] = useState('');
   const [tenantOffers, setTenantOffers] = useState([]);
 
+  const formatDateTime = (raw) => {
+    if (!raw) return '';
+    try {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleString();
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const formatDateOnly = (raw) => {
+    if (!raw) return '';
+    try {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleDateString();
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const toTenantCardModel = (offerDoc) => {
+    const o = offerDoc || {};
+    const property = o?.propertyId || {};
+    const photos = Array.isArray(property?.photos) ? property.photos : [];
+    const requested = Number(o?.requestedAdvanceAmount || 0) || 0;
+    const validityDays = Number(o?.requestedAdvanceValidityDays || 0) || 0;
+    const meetingLabel = formatDateTime(o?.proposedMeetingTime);
+    const joiningLabel = formatDateOnly(o?.desiredJoiningDate);
+    const actionType = String(o?.actionType || '').trim().toLowerCase();
+
+    const subtitleParts = [];
+    if (requested > 0) subtitleParts.push(`Advance: ${moneyLabel(requested, '-')}`);
+    if (validityDays > 0) subtitleParts.push(`Valid: ${validityDays} day${validityDays === 1 ? '' : 's'}`);
+    if (meetingLabel) subtitleParts.push(`Meeting: ${meetingLabel}`);
+    if (joiningLabel) subtitleParts.push(`Joining: ${joiningLabel}`);
+
+    return {
+      key: String(o?._id || o?.id || ''),
+      propertyId: String(property?._id || property?.id || ''),
+      propertyName: String(property?.propertyName || 'Property').trim(),
+      address: String(property?.address || '').trim(),
+      city: String(property?.city || '').trim(),
+      photo: resolveImageUri(photos[0]),
+      offeredRent: Number(o?.offerRent || 0) || 0,
+      status: String(o?.status || 'pending').trim().toLowerCase(),
+      actionType,
+      requestAmount: requested,
+      requestValidityDays: validityDays,
+      requestedDetails: subtitleParts.join('  •  '),
+      submittedAt: o?.createdAt ? new Date(o.createdAt).getTime() : 0,
+    };
+  };
+
   const resolveImageUri = (raw) => {
     if (!raw) return null;
     if (typeof raw === 'string') {
@@ -125,41 +180,28 @@ export default function OffersScreen({ navigation }) {
   const loadTenantOfferStatus = async () => {
     try {
       setLoading(true);
-      const user = await loadRole();
-      const uid = user?._id || user?.id || null;
+      await loadRole();
+      const authHeaders = await getAuthHeaders();
+      const resp = await fetch(`${API_BASE_URL}/api/offers/sent`, {
+        headers: {
+          ...authHeaders,
+        },
+      });
 
-      // Local status source for now (until backend endpoint is available)
-      const json = await AsyncStorage.getItem(OFFER_SUBMISSIONS_KEY);
-      const map = json ? JSON.parse(json) : {};
-      const safe = map && typeof map === 'object' ? map : {};
-      const scoped = uid && safe?.byUser && typeof safe.byUser === 'object' ? safe.byUser?.[String(uid)] : null;
-      const entries = scoped && typeof scoped === 'object' ? Object.entries(scoped) : [];
+      if (!resp.ok) {
+        let msg = 'Failed to load offers.';
+        try {
+          const data = await resp.json();
+          msg = String(data?.message || data?.error || msg);
+        } catch (e) {}
+        Alert.alert('Offers', msg);
+        setTenantOffers([]);
+        return;
+      }
 
-      const list = entries
-        .map(([key, val]) => {
-          const pid = String(key || '').split('::')[1] || null;
-          const offer = val?.offer || {};
-          const deal = val?.dealSnapshot || {};
-          const property = deal?.property || {};
-          const address = String(deal?.property?.address || '').trim();
-          return {
-            key,
-            propertyId: pid,
-            propertyName: String(property?.propertyName || property?.title || 'Property').trim(),
-            address,
-            city: String(property?.city || '').trim(),
-            photo: resolveImageUri(property?.photos?.[0] || property?.photo || property?.image),
-            offeredRent: Number(offer?.offerPrice || offer?.offerRent || 0) || 0,
-            // Status is backend-driven; default to pending for now
-            status: String(val?.status || 'pending').trim().toLowerCase(),
-            actionType: String(val?.actionType || '').trim().toLowerCase(),
-            requestAmount: Number(val?.requestAmount || 0) || 0,
-            submittedAt: Number(val?.submittedAt || 0) || 0,
-          };
-        })
-        .sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
-
-      setTenantOffers(list);
+      const data = await resp.json();
+      const list = Array.isArray(data?.offers) ? data.offers : [];
+      setTenantOffers(list.map(toTenantCardModel));
     } catch (e) {
       setTenantOffers([]);
     } finally {
@@ -230,6 +272,7 @@ export default function OffersScreen({ navigation }) {
     { key: 'all', label: 'All' },
     { key: 'action_required', label: 'Action Required' },
     { key: 'accepted', label: 'Accepted' },
+    { key: 'on_hold', label: 'On Hold' },
     { key: 'pending', label: 'Pending' },
   ];
 
@@ -237,7 +280,7 @@ export default function OffersScreen({ navigation }) {
     const list = Array.isArray(tenantOffers) ? tenantOffers : [];
     if (activeFilter === 'all') return list;
     if (activeFilter === 'action_required') {
-      return list.filter((x) => x?.actionType === 'advance_requested' || x?.status === 'action_required');
+      return list.filter((x) => String(x?.actionType || '').toLowerCase() === 'advance_requested');
     }
     return list.filter((x) => String(x?.status || '').toLowerCase() === activeFilter);
   }, [tenantOffers, activeFilter]);
@@ -246,12 +289,12 @@ export default function OffersScreen({ navigation }) {
     const status = String(item?.status || '').toLowerCase();
     const action = String(item?.actionType || '').toLowerCase();
 
+    if (status === 'rejected') return { label: 'Rejected', tone: 'rejected' };
+    if (status === 'on_hold') return { label: 'On Hold', tone: 'on_hold' };
     if (action === 'advance_requested') {
       return { label: 'Advance Requested', tone: 'primary' };
     }
     if (status === 'accepted') return { label: 'Accepted', tone: 'accepted' };
-    if (status === 'rejected') return { label: 'Rejected', tone: 'rejected' };
-    if (status === 'counter_offer') return { label: 'Counter Offer', tone: 'counter' };
     return { label: 'Pending', tone: 'pending' };
   };
 
@@ -365,6 +408,8 @@ export default function OffersScreen({ navigation }) {
                     ? styles.badgeAccepted
                     : badge.tone === 'rejected'
                       ? styles.badgeRejected
+                      : badge.tone === 'on_hold'
+                        ? styles.badgeOnHold
                       : badge.tone === 'counter'
                         ? styles.badgeCounter
                         : badge.tone === 'pending'
@@ -430,13 +475,41 @@ export default function OffersScreen({ navigation }) {
                               {it.requestAmount ? moneyLabel(it.requestAmount, '-') : moneyLabel(0, '₹0')}
                             </Text>
                           </View>
-                          <TouchableOpacity style={styles.primaryActionBtn} activeOpacity={0.9}>
+                          <TouchableOpacity
+                            style={styles.primaryActionBtn}
+                            activeOpacity={0.9}
+                            onPress={() => {
+                              navigation.navigate('Payments', {
+                                source: 'offer_advance_request',
+                                amount: it.requestAmount || 0,
+                                offerId: it.key,
+                                propertyId: it.propertyId,
+                                propertyName: it.propertyName,
+                                validityDays: it.requestValidityDays || 0,
+                              });
+                            }}
+                          >
                             <Text style={styles.primaryActionText}>Pay Advance</Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
                         <View style={styles.offerStatusFooterRow}>
-                          <TouchableOpacity style={styles.secondaryLink} activeOpacity={0.85}>
+                          <TouchableOpacity
+                            style={styles.secondaryLink}
+                            activeOpacity={0.85}
+                            onPress={() =>
+                              navigation.navigate('PropertyDetails', {
+                                property: {
+                                  _id: it.propertyId,
+                                  propertyName: it.propertyName,
+                                  address: it.address,
+                                  city: it.city,
+                                  photos: it.photo ? [it.photo] : [],
+                                },
+                                fromRole: 'tenant',
+                              })
+                            }
+                          >
                             <Text style={styles.secondaryLinkText}>View Details</Text>
                           </TouchableOpacity>
                         </View>
@@ -538,6 +611,10 @@ export default function OffersScreen({ navigation }) {
                       ) ?? null;
                       const offered = Number(o?.offerRent || o?.offerPrice || 0);
                       const createdAtLabel = String(o?.createdAt || '').trim();
+                      const isRequestSent = String(o?.actionType || '').toLowerCase() === 'advance_requested';
+                      const offerStatus = String(o?.status || '').toLowerCase();
+                      const ownerStatusLabel =
+                        offerStatus === 'rejected' ? 'Rejected' : offerStatus === 'on_hold' ? 'On Hold' : '';
 
                       return (
                         <View key={offerKey(o, index, pid)} style={styles.tenantCard}>
@@ -559,6 +636,30 @@ export default function OffersScreen({ navigation }) {
                                     <Text style={styles.typeBadgeText}>{tenantType}</Text>
                                   </View>
                                 </View>
+                                {isRequestSent ? (
+                                  <View style={styles.ownerRequestSentPill}>
+                                    <Text style={styles.ownerRequestSentPillText}>Request Sent</Text>
+                                  </View>
+                                ) : null}
+                                {!!ownerStatusLabel && (
+                                  <View
+                                    style={[
+                                      styles.ownerStatusPill,
+                                      offerStatus === 'rejected' ? styles.ownerStatusPillRejected : styles.ownerStatusPillHold,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.ownerStatusPillText,
+                                        offerStatus === 'rejected'
+                                          ? styles.ownerStatusPillTextRejected
+                                          : styles.ownerStatusPillTextHold,
+                                      ]}
+                                    >
+                                      {ownerStatusLabel}
+                                    </Text>
+                                  </View>
+                                )}
                                 <View style={styles.tenantCardSubRow}>
                                   <Text style={styles.tenantCardSubText}>{tenantCity || '-'}</Text>
                                   <Text style={styles.tenantCardSubText}>•</Text>
@@ -877,6 +978,47 @@ const styles = StyleSheet.create({
     color: '#15803d',
     textTransform: 'capitalize',
   },
+  ownerRequestSentPill: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(59,130,246,0.10)',
+    borderColor: 'rgba(59,130,246,0.22)',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  ownerRequestSentPillText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: theme.colors.primary,
+  },
+  ownerStatusPill: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  ownerStatusPillRejected: {
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderColor: 'rgba(239,68,68,0.22)',
+  },
+  ownerStatusPillHold: {
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderColor: 'rgba(245,158,11,0.22)',
+  },
+  ownerStatusPillText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  ownerStatusPillTextRejected: {
+    color: '#dc2626',
+  },
+  ownerStatusPillTextHold: {
+    color: '#b45309',
+  },
   tenantCardSubRow: {
     marginTop: 6,
     flexDirection: 'row',
@@ -1077,8 +1219,11 @@ const styles = StyleSheet.create({
   badgeRejected: {
     backgroundColor: 'rgba(239,68,68,0.10)',
   },
+  badgeOnHold: {
+    backgroundColor: 'rgba(245,158,11,0.12)',
+  },
   badgeCounter: {
-    backgroundColor: 'rgba(59,130,246,0.10)',
+    backgroundColor: 'rgba(234,179,8,0.12)',
   },
   badgePending: {
     backgroundColor: 'rgba(245,158,11,0.12)',

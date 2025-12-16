@@ -14,7 +14,12 @@ const OfferSchema = new mongoose.Schema(
     tenantType: { type: String, trim: true },
     acceptsRules: { type: Boolean, default: false },
     matchPercent: { type: Number, default: 0 },
-    status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'accepted', 'rejected', 'on_hold'], default: 'pending' },
+    actionType: { type: String, enum: ['advance_requested', 'none'], default: 'none' },
+    requestedAdvanceAmount: { type: Number },
+    requestedAdvanceValidityDays: { type: Number },
+    proposedMeetingTime: { type: Date },
+    desiredJoiningDate: { type: Date },
   },
   { timestamps: true }
 );
