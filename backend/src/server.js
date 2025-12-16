@@ -16,6 +16,12 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/home_app';
 
+const CORS_ALLOW_ALL = String(process.env.CORS_ALLOW_ALL || '').toLowerCase() === 'true';
+const envOrigins = String(process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((v) => v.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -25,7 +31,11 @@ app.use(
         'http://localhost:19006',
         'http://127.0.0.1:19006',
       ];
+      if (envOrigins.length) {
+        allowlist.push(...envOrigins);
+      }
       if (!origin) return callback(null, true);
+      if (CORS_ALLOW_ALL) return callback(null, true);
       if (allowlist.includes(origin)) return callback(null, true);
       return callback(null, false);
     },
@@ -50,15 +60,20 @@ mongoose
   })
   .then(() => {
     console.log('Connected to MongoDB');
+
+    app.listen(PORT, () => {
+      console.log(`Backend running on port ${PORT}`);
+    });
   })
   .catch((err) => {
     console.error('Error connecting to MongoDB:', err.message);
+
+    if (process.env.NODE_ENV === 'production') {
+      console.error('MongoDB connection is required in production. Check MONGODB_URI on Render.');
+      process.exit(1);
+    }
   });
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
-});
-
-app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
 });
