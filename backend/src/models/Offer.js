@@ -23,6 +23,9 @@ const OfferSchema = new mongoose.Schema(
 
     bookingVerified: { type: Boolean, default: false, index: true },
     bookingVerifiedAt: { type: Date },
+
+    tenantMoveInConfirmed: { type: Boolean, default: false, index: true },
+    tenantMoveInConfirmedAt: { type: Date },
   },
   { timestamps: true }
 );

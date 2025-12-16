@@ -13,6 +13,8 @@ const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 export default function TenentsScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [booked, setBooked] = useState([]);
+  const [offerMoveInByOfferId, setOfferMoveInByOfferId] = useState({});
+  const [tab, setTab] = useState('inactive');
 
   const getAuthHeaders = async () => {
     const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
@@ -62,7 +64,7 @@ export default function TenentsScreen({ navigation }) {
         return;
       }
 
-      const url = `${API_BASE_URL}/api/payments/incoming?paymentType=booking&ownerVerified=true&status=paid`;
+      const url = `${API_BASE_URL}/api/payments/incoming?ownerVerified=true&status=paid`;
       const resp = await fetch(url, { headers: { ...authHeaders } });
       if (!resp.ok) {
         let msg = 'Failed to load tenants.';
@@ -74,7 +76,44 @@ export default function TenentsScreen({ navigation }) {
         return;
       }
       const data = await resp.json().catch(() => ({}));
-      setBooked(Array.isArray(data?.payments) ? data.payments : []);
+      const rawPayments = Array.isArray(data?.payments) ? data.payments : [];
+      // Keep only booking-like records (must be linked to an offer + property + tenant)
+      const payments = rawPayments.filter((p) => !!p?.offerId && !!p?.propertyId && !!p?.tenantId);
+      setBooked(payments);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmMoveIn = async (offerId) => {
+    const id = String(offerId || '').trim();
+    if (!id) return;
+
+    try {
+      setLoading(true);
+      const authHeaders = await getAuthHeaders();
+      if (!authHeaders?.Authorization) {
+        Alert.alert('Tenents', 'Please login again.');
+        return;
+      }
+
+      const resp = await fetch(`${API_BASE_URL}/api/offers/${encodeURIComponent(id)}/confirm-move-in`, {
+        method: 'PATCH',
+        headers: { ...authHeaders },
+      });
+
+      if (!resp.ok) {
+        let msg = 'Failed to confirm move-in.';
+        try {
+          const data = await resp.json();
+          msg = String(data?.message || data?.error || msg);
+        } catch (e) {}
+        Alert.alert('Tenents', msg);
+        return;
+      }
+
+      setOfferMoveInByOfferId((prev) => ({ ...prev, [id]: true }));
+      Alert.alert('Tenents', 'Tenant marked as Active.');
     } finally {
       setLoading(false);
     }
@@ -99,18 +138,28 @@ export default function TenentsScreen({ navigation }) {
       const property = tx?.propertyId || {};
       const offer = tx?.offerId || {};
       const photos = Array.isArray(property?.photos) ? property.photos : [];
+      const offerId = String(offer?._id || tx?.offerId || '').trim();
+      const movedIn = !!offerMoveInByOfferId?.[offerId] || !!offer?.tenantMoveInConfirmed;
 
       return {
         key: String(tx?._id || tx?.transactionId || Math.random()),
         tx,
         offer,
+        offerId,
+        movedIn,
         property,
         tenant,
         imageUrl: resolveImageUri(photos[0]),
         tenantName: `${String(tenant?.firstName || '').trim()} ${String(tenant?.lastName || '').trim()}`.trim(),
       };
     });
-  }, [booked]);
+  }, [booked, offerMoveInByOfferId]);
+
+  const filteredCards = useMemo(() => {
+    const list = Array.isArray(tenantCards) ? tenantCards : [];
+    if (tab === 'active') return list.filter((c) => !!c?.movedIn);
+    return list.filter((c) => !c?.movedIn);
+  }, [tenantCards, tab]);
 
   return (
     <ScreenLayout
@@ -134,11 +183,30 @@ export default function TenentsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {!tenantCards.length ? (
-          <Text style={styles.subtitle}>No confirmed tenants yet.</Text>
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tabChip, tab === 'inactive' ? styles.tabChipActive : null]}
+            onPress={() => setTab('inactive')}
+            activeOpacity={0.9}
+          >
+            <Text style={[styles.tabChipText, tab === 'inactive' ? styles.tabChipTextActive : null]}>Inactive</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabChip, tab === 'active' ? styles.tabChipActive : null]}
+            onPress={() => setTab('active')}
+            activeOpacity={0.9}
+          >
+            <Text style={[styles.tabChipText, tab === 'active' ? styles.tabChipTextActive : null]}>Active</Text>
+          </TouchableOpacity>
+        </View>
+
+        {!filteredCards.length ? (
+          <Text style={styles.subtitle}>
+            {tab === 'active' ? 'No active tenants yet.' : 'No inactive tenants yet.'}
+          </Text>
         ) : (
           <View style={styles.listWrap}>
-            {tenantCards.map((c) => {
+            {filteredCards.map((c) => {
               const propName = String(c?.property?.propertyName || '').trim();
               const tenantName = c?.tenantName || String(c?.tenant?.username || 'Tenant').trim();
               const ownerVerifiedAt = formatDateTime(c?.tx?.ownerVerifiedAt);
@@ -161,6 +229,7 @@ export default function TenentsScreen({ navigation }) {
                       </Text>
                       <Text style={styles.cardSub}>Booking Amount: {moneyLabel(c?.tx?.amount, '-')}</Text>
                       <Text style={styles.cardSub}>Verified: {ownerVerifiedAt}</Text>
+                      <Text style={styles.cardSub}>Status: {c?.movedIn ? 'Active' : 'Inactive'}</Text>
                     </View>
                   </View>
 
@@ -179,6 +248,17 @@ export default function TenentsScreen({ navigation }) {
                   >
                     <Text style={styles.primaryBtnText}>Make Agreement</Text>
                   </TouchableOpacity>
+
+                  {!c?.movedIn ? (
+                    <TouchableOpacity
+                      style={[styles.secondaryBtn, loading ? styles.btnDisabled : null]}
+                      onPress={() => confirmMoveIn(c.offerId)}
+                      activeOpacity={0.9}
+                      disabled={loading}
+                    >
+                      <Text style={styles.secondaryBtnText}>Confirm Move-In</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               );
             })}
@@ -223,6 +303,31 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '900',
     fontSize: 12,
+  },
+  tabRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  tabChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: '#ffffff',
+  },
+  tabChipActive: {
+    backgroundColor: 'rgba(59,130,246,0.10)',
+    borderColor: 'rgba(59,130,246,0.25)',
+  },
+  tabChipText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: theme.colors.textSecondary,
+  },
+  tabChipTextActive: {
+    color: theme.colors.primary,
   },
   btnDisabled: {
     opacity: 0.6,
@@ -283,6 +388,21 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 13,
+  },
+  secondaryBtn: {
+    marginTop: 10,
+    backgroundColor: '#eef2ff',
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.25)',
+  },
+  secondaryBtnText: {
+    color: theme.colors.primary,
     fontWeight: '900',
     fontSize: 13,
   },

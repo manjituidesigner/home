@@ -187,6 +187,39 @@ router.patch('/:offerId/status', auth, async (req, res) => {
   }
 });
 
+router.patch('/:offerId/confirm-move-in', auth, async (req, res) => {
+  try {
+    const ownerId = req.user?.userId;
+    if (!ownerId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { offerId } = req.params;
+    if (!offerId) return res.status(400).json({ message: 'offerId is required' });
+
+    const offer = await Offer.findById(offerId);
+    if (!offer) return res.status(404).json({ message: 'Offer not found' });
+
+    if (String(offer.ownerId) !== String(ownerId)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    if (String(offer.status || '').toLowerCase() !== 'accepted') {
+      return res.status(400).json({ message: 'Offer is not accepted' });
+    }
+
+    if (!offer.bookingVerified) {
+      return res.status(400).json({ message: 'Booking payment is not verified yet' });
+    }
+
+    offer.tenantMoveInConfirmed = true;
+    offer.tenantMoveInConfirmedAt = new Date();
+    await offer.save();
+
+    return res.json({ success: true, offer });
+  } catch (e) {
+    return res.status(500).json({ message: 'Failed to confirm tenant move-in' });
+  }
+});
+
 router.get('/history/:propertyId/:tenantId', auth, async (req, res) => {
   try {
     const ownerId = req.user?.userId;
