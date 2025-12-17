@@ -56,7 +56,22 @@ router.put('/me', auth, async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
     return res.json({ success: true, user });
   } catch (e) {
-    return res.status(500).json({ message: 'Failed to update profile' });
+    const err = e || {};
+    console.error('Failed to update profile:', {
+      message: err.message,
+      name: err.name,
+      http_code: err.http_code,
+      code: err.code,
+      stack: err.stack,
+    });
+
+    // Cloudinary tends to return useful fields like `http_code` and `message`
+    const status = typeof err.http_code === 'number' ? err.http_code : 500;
+    const message = typeof err.message === 'string' && err.message.trim().length
+      ? err.message
+      : 'Failed to update profile';
+
+    return res.status(status).json({ message });
   }
 });
 
