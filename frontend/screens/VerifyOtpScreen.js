@@ -74,8 +74,8 @@ export default function VerifyOtpScreen({ navigation, route }) {
       try {
         const url =
           mode === 'reset_password'
-            ? `${API_BASE_URL}/api/auth/verify-reset-otp`
-            : `${API_BASE_URL}/api/auth/verify-otp`;
+            ? `${API_BASE_URL}/auth/verify-reset-otp`
+            : `${API_BASE_URL}/auth/verify-otp`;
         const body =
           mode === 'reset_password'
             ? { resetOtpId, code }

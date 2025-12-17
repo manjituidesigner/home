@@ -392,7 +392,7 @@ export default function MakeOfferScreen({ route, navigation }) {
         },
       };
 
-      const resp = await fetch(`${API_BASE_URL}/api/offers`, {
+      const resp = await fetch(`${API_BASE_URL}/offers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -71,11 +71,11 @@ export default function PaymentsScreen({ navigation, route }) {
     try {
       setLoading(true);
       const authHeaders = await getAuthHeaders();
-      if (!authHeaders?.Authorization) {
+      if (!authHeaders.Authorization) {
         Alert.alert('Payments', 'Please login again.');
         return;
       }
-      const resp = await fetch(`${API_BASE_URL}/api/payments/my`, { headers: { ...authHeaders } });
+      const resp = await fetch(`${API_BASE_URL}/payments/my`, { headers: { ...authHeaders } });
       if (!resp.ok) {
         let msg = 'Failed to load payments.';
         try {
@@ -96,11 +96,11 @@ export default function PaymentsScreen({ navigation, route }) {
     try {
       setLoading(true);
       const authHeaders = await getAuthHeaders();
-      if (!authHeaders?.Authorization) {
+      if (!authHeaders.Authorization) {
         Alert.alert('Payments', 'Please login again.');
         return;
       }
-      const resp = await fetch(`${API_BASE_URL}/api/payments/incoming`, { headers: { ...authHeaders } });
+      const resp = await fetch(`${API_BASE_URL}/payments/incoming`, { headers: { ...authHeaders } });
       if (!resp.ok) {
         let msg = 'Failed to load payments.';
         try {
@@ -126,7 +126,7 @@ export default function PaymentsScreen({ navigation, route }) {
         return;
       }
       const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-      const resp = await fetch(`${API_BASE_URL}/api/rents/incoming${qs}`, { headers: { ...authHeaders } });
+      const resp = await fetch(`${API_BASE_URL}/rents/incoming${qs}`, { headers: { ...authHeaders } });
       if (!resp.ok) {
         let msg = 'Failed to load rent records.';
         try {
@@ -155,7 +155,7 @@ export default function PaymentsScreen({ navigation, route }) {
         Alert.alert('Payments', 'Please login again.');
         return;
       }
-      const resp = await fetch(`${API_BASE_URL}/api/payments/create`, {
+      const resp = await fetch(`${API_BASE_URL}/payments/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -192,7 +192,7 @@ export default function PaymentsScreen({ navigation, route }) {
         Alert.alert('Payments', 'Please login again.');
         return;
       }
-      const resp = await fetch(`${API_BASE_URL}/api/payments/${encodeURIComponent(txnId)}/mark-paid`, {
+      const resp = await fetch(`${API_BASE_URL}/payments/${encodeURIComponent(txnId)}/mark-paid`, {
         method: 'PATCH',
         headers: { ...authHeaders },
       });
@@ -224,7 +224,7 @@ export default function PaymentsScreen({ navigation, route }) {
         Alert.alert('Payments', 'Please login again.');
         return;
       }
-      const resp = await fetch(`${API_BASE_URL}/api/payments/${encodeURIComponent(id)}/verify`, {
+      const resp = await fetch(`${API_BASE_URL}/payments/${encodeURIComponent(id)}/verify`, {
         method: 'PATCH',
         headers: { ...authHeaders },
       });

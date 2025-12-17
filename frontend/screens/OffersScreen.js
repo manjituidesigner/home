@@ -182,7 +182,7 @@ export default function OffersScreen({ navigation }) {
       setLoading(true);
       await loadRole();
       const authHeaders = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE_URL}/api/offers/sent`, {
+      const resp = await fetch(`${API_BASE_URL}/offers/sent`, {
         headers: {
           ...authHeaders,
         },
@@ -213,7 +213,7 @@ export default function OffersScreen({ navigation }) {
     try {
       setLoading(true);
       const authHeaders = await getAuthHeaders();
-      const resp = await fetch(`${API_BASE_URL}/api/offers/received`, {
+      const resp = await fetch(`${API_BASE_URL}/offers/received`, {
         headers: {
           ...authHeaders,
         },
@@ -232,7 +232,7 @@ export default function OffersScreen({ navigation }) {
       const data = await resp.json();
       const list = Array.isArray(data?.offers) ? data.offers : [];
       try {
-        console.log('[OffersScreen] /api/offers/received raw payload keys:', Object.keys(data || {}));
+        console.log('[OffersScreen] /offers/received raw payload keys:', Object.keys(data || {}));
         console.log('[OffersScreen] offers count:', Array.isArray(list) ? list.length : -1);
       } catch (e) {}
       setOffers(list);

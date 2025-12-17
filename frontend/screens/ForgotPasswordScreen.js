@@ -31,7 +31,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
     try {
       setSubmitting(true);
-      const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+      const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier }),

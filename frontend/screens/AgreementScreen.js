@@ -229,7 +229,7 @@ export default function AgreementScreen({ navigation, route }) {
         },
       };
 
-      const resp = await fetch(`${API_BASE_URL}/api/agreements/create`, {
+      const resp = await fetch(`${API_BASE_URL}/agreements/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

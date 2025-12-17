@@ -64,7 +64,7 @@ export default function TenentsScreen({ navigation }) {
         return;
       }
 
-      const url = `${API_BASE_URL}/api/payments/incoming?ownerVerified=true&status=paid`;
+      const url = `${API_BASE_URL}/payments/incoming?ownerVerified=true&status=paid`;
       const resp = await fetch(url, { headers: { ...authHeaders } });
       if (!resp.ok) {
         let msg = 'Failed to load tenants.';
@@ -97,7 +97,7 @@ export default function TenentsScreen({ navigation }) {
         return;
       }
 
-      const resp = await fetch(`${API_BASE_URL}/api/offers/${encodeURIComponent(id)}/confirm-move-in`, {
+      const resp = await fetch(`${API_BASE_URL}/offers/${encodeURIComponent(id)}/confirm-move-in`, {
         method: 'PATCH',
         headers: { ...authHeaders },
       });

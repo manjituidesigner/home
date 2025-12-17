@@ -267,7 +267,7 @@ export default function PropertyDetailsScreen({ route, navigation }) {
         Alert.alert('Session', 'Please login again. Token missing.');
         return;
       }
-      const response = await fetch(`${API_BASE_URL}/api/offers`, {
+      const response = await fetch(`${API_BASE_URL}/offers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

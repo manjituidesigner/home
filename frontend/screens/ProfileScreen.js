@@ -148,7 +148,7 @@ export default function ProfileScreen({ navigation }) {
         const authHeaders = await getAuthHeaders();
         if (!authHeaders.Authorization) return;
 
-        const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        const res = await fetch(`${API_BASE_URL}/auth/me`, {
           headers: {
             'Content-Type': 'application/json',
             ...authHeaders,
@@ -329,7 +329,7 @@ export default function ProfileScreen({ navigation }) {
         Alert.alert('Session', 'Please login again.');
         return;
       }
-      const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+      const response = await fetch(`${API_BASE_URL}/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -378,7 +378,7 @@ export default function ProfileScreen({ navigation }) {
         await AsyncStorage.setItem(USER_PROFILE_STORAGE_KEY, JSON.stringify(updatedUser));
 
         try {
-          const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          const meRes = await fetch(`${API_BASE_URL}/auth/me`, {
             headers: {
               'Content-Type': 'application/json',
               ...authHeaders,

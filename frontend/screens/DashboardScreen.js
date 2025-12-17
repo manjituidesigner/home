@@ -143,7 +143,7 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
 
-      const resp = await fetch(`${API_BASE_URL}/api/offers/sent`, {
+      const resp = await fetch(`${API_BASE_URL}/offers/sent`, {
         headers: {
           ...authHeaders,
         },
@@ -266,17 +266,16 @@ export default function DashboardScreen({ navigation }) {
       : null;
     return () => {
       if (typeof unsub === 'function') unsub();
-    };
-  }, [navigation, sessionUserId]);
-
   useEffect(() => {
     const loadTenantFeed = async () => {
       if (normalizedRole !== 'tenant') return;
       try {
         setLoadingFeed(true);
-        const response = await fetch(`${API_BASE_URL}/api/properties/tenant-feed`, {
+        const authHeaders = await getAuthHeaders();
+        const response = await fetch(`${API_BASE_URL}/properties`, {
           headers: {
             'Content-Type': 'application/json',
+            ...authHeaders,
           },
         });
 

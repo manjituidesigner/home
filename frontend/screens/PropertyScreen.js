@@ -247,7 +247,7 @@ export default function PropertyScreen({ navigation, route }) {
     const nextStatus = effectiveStatus === 'available' ? 'occupied' : 'available';
     try {
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/properties/${item._id}`, {
+      const response = await fetch(`${API_BASE_URL}/properties/${item._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -433,7 +433,7 @@ export default function PropertyScreen({ navigation, route }) {
               const result = reader.result;
               if (typeof result !== 'string') return;
 
-              const resp = await fetch(`${API_BASE_URL}/api/properties/upload-image`, {
+              const resp = await fetch(`${API_BASE_URL}/properties/upload-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dataUrl: result }),
@@ -495,7 +495,7 @@ export default function PropertyScreen({ navigation, route }) {
       }
 
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/properties/upload-image`, {
+        const resp = await fetch(`${API_BASE_URL}/properties/upload-image`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataUrl: `data:image/jpeg;base64,${base64}` }),
@@ -528,7 +528,7 @@ export default function PropertyScreen({ navigation, route }) {
     try {
       setLoadingList(true);
       const authHeaders = await getAuthHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/properties`, {
+      const response = await fetch(`${API_BASE_URL}/properties`, {
         headers: {
           ...authHeaders,
         },
@@ -561,8 +561,8 @@ export default function PropertyScreen({ navigation, route }) {
       const isEditing = !!activeProperty._id || !!editingPropertyId;
       const targetId = activeProperty._id || editingPropertyId;
       const url = isEditing
-        ? `${API_BASE_URL}/api/properties/${targetId}`
-        : `${API_BASE_URL}/api/properties`;
+        ? `${API_BASE_URL}/properties/${targetId}`
+        : `${API_BASE_URL}/properties`;
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -650,7 +650,7 @@ export default function PropertyScreen({ navigation, route }) {
     }
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/properties/${deleteTarget._id}`,
+        `${API_BASE_URL}/properties/${deleteTarget._id}`,
         { method: 'DELETE', headers: { ...(await getAuthHeaders()) } },
       );
       if (!response.ok) {

@@ -204,7 +204,7 @@ export default function OwnerOfferDetailsScreen({ route, navigation }) {
         return;
       }
 
-      const resp = await fetch(`${API_BASE_URL}/api/offers/history/${propertyId}/${tenantId}`, {
+      const resp = await fetch(`${API_BASE_URL}/offers/history/${propertyId}/${tenantId}`, {
         headers: {
           ...authHeaders,
         },
@@ -311,7 +311,7 @@ export default function OwnerOfferDetailsScreen({ route, navigation }) {
         return;
       }
 
-      const url = `${API_BASE_URL}/api/offers/${offerId}/request-advance`;
+      const url = `${API_BASE_URL}/offers/${offerId}/request-advance`;
       try {
         console.log('[OwnerOfferDetails] request-advance url:', url);
         console.log('[OwnerOfferDetails] request-advance payload:', payload);
@@ -378,7 +378,7 @@ export default function OwnerOfferDetailsScreen({ route, navigation }) {
         return;
       }
 
-      const resp = await fetch(`${API_BASE_URL}/api/offers/${offerId}/status`, {
+      const resp = await fetch(`${API_BASE_URL}/offers/${offerId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
