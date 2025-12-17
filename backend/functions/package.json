@@ -1,0 +1,24 @@
+{
+  "name": "functions",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.8.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "firebase-functions": "^7.0.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^7.8.8",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.11",
+    "razorpay": "^2.9.6",
+    "sharp": "^0.34.5"
+  }
+}
