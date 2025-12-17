@@ -266,6 +266,9 @@ export default function DashboardScreen({ navigation }) {
       : null;
     return () => {
       if (typeof unsub === 'function') unsub();
+    };
+  }, [navigation, normalizedRole, sessionUserId]);
+
   useEffect(() => {
     const loadTenantFeed = async () => {
       if (normalizedRole !== 'tenant') return;
