@@ -5,21 +5,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Platform,
+  TextInput,
+  ImageBackground,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
-import PropertyImageSlider from '../components/PropertyImageSlider';
 import { getSessionUser } from '../session';
 import LoadingOverlay from '../components/LoadingOverlay';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
+import { API_BASE_URL } from '../apiBaseUrl';
 
-const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
-const RENDER_BASE_URL = 'https://apiv2-pnmqz54req-uc.a.run.app';
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const WISHLIST_STORAGE_KEY = 'WISHLIST_PROPERTIES';
 const OFFER_SUBMISSIONS_KEY = 'OFFER_SUBMISSIONS_V1';
@@ -113,8 +110,38 @@ export default function DashboardScreen({ navigation }) {
   const [wishlistIds, setWishlistIds] = useState([]);
   const [offerSubmittedKeys, setOfferSubmittedKeys] = useState({});
   const [ownerRequestByPropertyId, setOwnerRequestByPropertyId] = useState({});
+  const [tenantSearch, setTenantSearch] = useState('');
 
   const normalizedRole = useMemo(() => normalizeRole(role), [role]);
+
+  const resolveImageUri = (raw) => {
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (!s) return null;
+      if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      const path = s.startsWith('/') ? s : `/${s}`;
+      return `${API_BASE_URL}${path}`;
+    }
+    if (typeof raw === 'object') {
+      if (typeof raw.uri === 'string') return resolveImageUri(raw.uri);
+      if (typeof raw.url === 'string') return resolveImageUri(raw.url);
+      if (typeof raw.path === 'string') return resolveImageUri(raw.path);
+    }
+    return null;
+  };
+
+  const filteredTenantFeed = useMemo(() => {
+    if (normalizedRole !== 'tenant') return tenantFeed;
+    const q = String(tenantSearch || '').trim().toLowerCase();
+    if (!q) return tenantFeed;
+    return (Array.isArray(tenantFeed) ? tenantFeed : []).filter((p) => {
+      const name = String(p?.propertyName || '').toLowerCase();
+      const addr = String(p?.address || '').toLowerCase();
+      const bhk = String(p?.bhk || '').toLowerCase();
+      return name.includes(q) || addr.includes(q) || bhk.includes(q);
+    });
+  }, [normalizedRole, tenantFeed, tenantSearch]);
 
   const loadWishlist = async () => {
     try {
@@ -274,13 +301,7 @@ export default function DashboardScreen({ navigation }) {
       if (normalizedRole !== 'tenant') return;
       try {
         setLoadingFeed(true);
-        const authHeaders = await getAuthHeaders();
-        const response = await fetch(`${API_BASE_URL}/properties`, {
-          headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders,
-          },
-        });
+        const response = await fetch(`${API_BASE_URL}/properties/tenant-feed`);
 
         const data = await response.json().catch(() => ([]));
         if (!response.ok) {
@@ -314,104 +335,131 @@ export default function DashboardScreen({ navigation }) {
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         {normalizedRole === 'tenant' ? (
           <View style={styles.feedBlock}>
-            <Text style={styles.sectionTitle}>Available properties</Text>
+            <View style={styles.tenantSearchWrap}>
+              <MaterialIcons name="search" size={20} color="#9ca3af" />
+              <TextInput
+                placeholder="Search locations, properties..."
+                placeholderTextColor="#9ca3af"
+                style={styles.tenantSearchInput}
+                value={tenantSearch}
+                onChangeText={setTenantSearch}
+              />
+              <TouchableOpacity style={styles.tenantFilterBtn} activeOpacity={0.85}>
+                <MaterialIcons name="tune" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.tenantSectionTitle}>Available Properties</Text>
+
             {loadingFeed ? (
               <Text style={styles.bodyText}>Loading properties...</Text>
-            ) : tenantFeed.length === 0 ? (
-              <Text style={styles.bodyText}>
-                No tenant-visible properties found.
-              </Text>
+            ) : filteredTenantFeed.length === 0 ? (
+              <Text style={styles.bodyText}>No tenant-visible properties found.</Text>
             ) : (
-              tenantFeed.map((item, index) => {
-                const photos = Array.isArray(item.photos) ? item.photos : [];
-                const city = (item.address || '').split(',').slice(-2, -1)[0] || '';
-                const rentLabel = item.rentAmount ? `₹${item.rentAmount}/month` : 'Rent not set';
-                const posted = formatPostedDate(item.createdAt);
-                const pid = String(item._id || '');
-                const uid = sessionUserId ? String(sessionUserId) : 'unknown_user';
-                const offerKey = `${uid}::${pid}`;
-                const raw = offerSubmittedKeys?.[offerKey];
-                const offerSubmitted = !!raw;
-                const requestFromOwner = !!ownerRequestByPropertyId?.[pid];
+              <View style={styles.tenantList}>
+                {filteredTenantFeed.map((item, index) => {
+                  const photos = Array.isArray(item.photos) ? item.photos : [];
+                  const cover = resolveImageUri(photos?.[0]);
+                  const rentLabel = item.rentAmount ? `₹${item.rentAmount}` : '-';
+                  const infoLabel = `${String(item.bhk || '').trim() || '1BHK'}${item.areaSqft ? ` • ${item.areaSqft} sqft` : ''}`;
+                  const ownerLabel =
+                    String(
+                      item?.ownerName ||
+                        item?.ownerId?.fullName ||
+                        item?.ownerId?.firstName ||
+                        item?.postedBy ||
+                        '',
+                    ).trim();
+                  const unitLabel = String(item.floor || item.customFloor || '').trim();
 
-                return (
-                  <View key={item._id || String(index)} style={styles.card}>
-                    <View style={styles.cardImageWrapper}>
-                      <PropertyImageSlider
-                        photos={photos}
-                        maxImages={5}
-                        autoSlide
-                        autoSlideIntervalMs={2500}
-                        height={190}
-                        borderRadius={0}
-                        showThumbnails
-                      />
-                      {offerSubmitted && (
-                        <View style={styles.offerSubmittedBadge}>
-                          <Ionicons name="checkmark-circle" size={14} color="#ffffff" />
-                          <Text style={styles.offerSubmittedBadgeText}>Offer submitted</Text>
-                        </View>
-                      )}
-                      {requestFromOwner && (
-                        <View
-                          style={[
-                            styles.ownerRequestBadge,
-                            offerSubmitted ? styles.ownerRequestBadgeWithOfferSubmitted : null,
-                          ]}
-                        >
-                          <Ionicons name="mail-unread-outline" size={14} color="#ffffff" />
-                          <Text style={styles.ownerRequestBadgeText}>Request from Owner</Text>
-                        </View>
-                      )}
-                      <TouchableOpacity
-                        style={styles.wishIconBtn}
-                        onPress={() => toggleWishlist(item)}
-                        activeOpacity={0.85}
+                  const pid = String(item._id || '');
+                  const uid = sessionUserId ? String(sessionUserId) : 'unknown_user';
+                  const offerKey = `${uid}::${pid}`;
+                  const raw = offerSubmittedKeys?.[offerKey];
+                  const offerSubmitted = !!raw;
+                  const requestFromOwner = !!ownerRequestByPropertyId?.[pid];
+                  const wishActive = wishlistIds.includes(item._id);
+
+                  return (
+                    <View key={item._id || String(index)} style={styles.tenantCard}>
+                      <ImageBackground
+                        source={cover ? { uri: cover } : undefined}
+                        style={styles.tenantCardImage}
+                        imageStyle={styles.tenantCardImageStyle}
                       >
-                        <Ionicons
-                          name={wishlistIds.includes(item._id) ? 'heart' : 'heart-outline'}
-                          size={20}
-                          color={wishlistIds.includes(item._id) ? '#ef4444' : '#111827'}
-                        />
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.cardBody}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>
-                        {item.propertyName || 'Untitled Property'}
-                      </Text>
-                      <Text style={styles.cardSub} numberOfLines={1}>
-                        {(city || item.address || 'Location not set').trim()}
-                      </Text>
-                      <Text style={styles.cardSub}>
-                        {(item.bhk || '1BHK').trim()}
-                      </Text>
-
-                      <Text style={styles.cardPrice}>{rentLabel}</Text>
-                      {!!posted && (
-                        <Text style={styles.cardMeta}>Posted: {posted}</Text>
-                      )}
-
-                      <View style={styles.cardActionsRow}>
+                        {offerSubmitted && (
+                          <View style={styles.tenantOfferBadge}>
+                            <Ionicons name="checkmark-circle" size={14} color="#ffffff" />
+                            <Text style={styles.tenantOfferBadgeText}>Offer submitted</Text>
+                          </View>
+                        )}
+                        {requestFromOwner && (
+                          <View
+                            style={[
+                              styles.tenantOwnerRequestBadge,
+                              offerSubmitted ? styles.tenantOwnerRequestBadgeStacked : null,
+                            ]}
+                          >
+                            <Ionicons name="mail-unread-outline" size={14} color="#ffffff" />
+                            <Text style={styles.tenantOwnerRequestBadgeText}>Request from Owner</Text>
+                          </View>
+                        )}
                         <TouchableOpacity
-                          style={styles.detailsBtn}
-                          onPress={() =>
-                            navigation.navigate('PropertyDetails', {
-                              property: item,
-                              propertyList: tenantFeed,
-                              index,
-                              fromRole: 'tenant',
-                            })
-                          }
-                          activeOpacity={0.9}
+                          style={styles.tenantFavBtn}
+                          onPress={() => toggleWishlist(item)}
+                          activeOpacity={0.85}
                         >
-                          <Text style={styles.detailsBtnLabel}>View Details</Text>
+                          <MaterialIcons
+                            name={wishActive ? 'favorite' : 'favorite-border'}
+                            size={20}
+                            color={wishActive ? '#ef4444' : '#111827'}
+                          />
                         </TouchableOpacity>
+                      </ImageBackground>
+
+                      <View style={styles.tenantCardBody}>
+                        <Text style={styles.tenantCardTitle} numberOfLines={1}>
+                          {item.propertyName || 'Untitled Property'}
+                        </Text>
+                        <Text style={styles.tenantOwner} numberOfLines={1}>
+                          {(ownerLabel || 'Owner').trim()}{unitLabel ? ` • ${unitLabel}` : ''}
+                        </Text>
+
+                        <View style={{ marginTop: 8 }}>
+                          <Text style={styles.tenantAddress} numberOfLines={2}>
+                            {String(item.address || 'Location not set').trim()}
+                          </Text>
+                          <Text style={styles.tenantInfo} numberOfLines={1}>
+                            {infoLabel}
+                          </Text>
+                        </View>
+
+                        <View style={styles.tenantCardFooter}>
+                          <Text style={styles.tenantPrice}>
+                            {rentLabel}
+                            <Text style={styles.tenantPerMonth}> /mo</Text>
+                          </Text>
+
+                          <TouchableOpacity
+                            style={styles.tenantDetailsBtn}
+                            onPress={() =>
+                              navigation.navigate('PropertyDetails', {
+                                property: item,
+                                propertyList: filteredTenantFeed,
+                                index,
+                                fromRole: 'tenant',
+                              })
+                            }
+                            activeOpacity={0.9}
+                          >
+                            <Text style={styles.tenantDetailsText}>View Details</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                );
-              })
+                  );
+                })}
+              </View>
             )}
           </View>
         ) : (
@@ -728,19 +776,6 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  body: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  bodyText: {
-    fontSize: 16,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 18,
-  },
   ownerNewRoot: {
     paddingTop: 12,
     paddingBottom: 12,
@@ -1293,6 +1328,158 @@ const styles = StyleSheet.create({
   },
   feedBlock: {
     marginTop: 16,
+  },
+  tenantSearchWrap: {
+    marginBottom: 20,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  tenantSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+  },
+  tenantFilterBtn: {
+    padding: 4,
+  },
+  tenantSectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  tenantList: {
+    gap: 20,
+  },
+  tenantCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  tenantCardImage: {
+    height: 200,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    padding: 12,
+    backgroundColor: '#e5e7eb',
+  },
+  tenantCardImageStyle: {
+    resizeMode: 'cover',
+  },
+  tenantFavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tenantCardBody: {
+    padding: 16,
+    gap: 4,
+  },
+  tenantCardTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  tenantOwner: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  tenantAddress: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4b5563',
+  },
+  tenantInfo: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  tenantCardFooter: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: '#e5e7eb',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tenantPrice: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  tenantPerMonth: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  tenantDetailsBtn: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  tenantDetailsText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  tenantOfferBadge: {
+    position: 'absolute',
+    left: 12,
+    top: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(17,24,39,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  tenantOfferBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tenantOwnerRequestBadge: {
+    position: 'absolute',
+    left: 12,
+    top: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(37,99,235,0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  tenantOwnerRequestBadgeStacked: {
+    top: 52,
+  },
+  tenantOwnerRequestBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   sectionTitle: {
     fontSize: 18,

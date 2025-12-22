@@ -16,14 +16,11 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 import LoadingOverlay from '../components/LoadingOverlay';
+import { API_BASE_URL } from '../apiBaseUrl';
 
 const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
-const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
-const RENDER_BASE_URL = 'https://apiv2-pnmqz54req-uc.a.run.app';
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
 
 export default function ProfileScreen({ navigation }) {
   const [isEditing, setIsEditing] = useState(true);
@@ -356,6 +353,13 @@ export default function ProfileScreen({ navigation }) {
         Alert.alert('Success', 'Profile 100% completed. You can access all pages now.');
       } else {
         Alert.alert('Success', 'Details have been saved.');
+      }
+
+      setIsEditing(false);
+      try {
+        if (navigation?.navigate) navigation.navigate('Profile');
+      } catch (e) {
+        // ignore navigation errors
       }
 
       await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({

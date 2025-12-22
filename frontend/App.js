@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
@@ -29,9 +31,48 @@ import SubscriptionScreen from './screens/SubscriptionScreen';
 import MakeOfferScreen from './screens/MakeOfferScreen';
 import OwnerOfferDetailsScreen from './screens/OwnerOfferDetailsScreen';
 import CustomDrawer from './components/CustomDrawer';
+import { setSessionToken, setSessionUser } from './session';
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
+
+const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
+const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
+
+function WebMobileFrame({ children }) {
+  const [viewport, setViewport] = useState(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return { width: window.innerWidth, height: window.innerHeight };
+    }
+    return { width: undefined, height: undefined };
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    onResize();
+
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  if (Platform.OS !== 'web') return children;
+
+  return (
+    <ScrollView
+      style={[styles.webPage, viewport.height ? { height: viewport.height } : null]}
+      contentContainerStyle={styles.webPageContent}
+      showsVerticalScrollIndicator
+    >
+      <View style={styles.webFrameSlot}>
+        <View style={styles.webFrame}>
+          <View style={styles.webFrameInner}>{children}</View>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
 
 function MainDrawer() {
   return (
@@ -59,22 +100,113 @@ function MainDrawer() {
 }
 
 export default function App() {
+  const [bootstrapped, setBootstrapped] = useState(false);
+  const [isAuthed, setIsAuthed] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [token, userJson] = await Promise.all([
+          AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY),
+          AsyncStorage.getItem(USER_PROFILE_STORAGE_KEY),
+        ]);
+
+        if (!mounted) return;
+
+        if (token) {
+          setSessionToken(token);
+          setIsAuthed(true);
+        } else {
+          setSessionToken(null);
+          setIsAuthed(false);
+        }
+
+        if (userJson) {
+          try {
+            setSessionUser(JSON.parse(userJson));
+          } catch (e) {
+            setSessionUser(null);
+          }
+        } else {
+          setSessionUser(null);
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setSessionToken(null);
+        setSessionUser(null);
+        setIsAuthed(false);
+      } finally {
+        if (!mounted) return;
+        setBootstrapped(true);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!bootstrapped) return null;
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-        <Stack.Screen name="VerifyOtp" component={VerifyOtpScreen} />
-        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-        <Stack.Screen name="PasswordChangedSuccess" component={PasswordChangedSuccessScreen} />
-        <Stack.Screen name="Welcome" component={WelcomeScreen} />
-        <Stack.Screen name="Main" component={MainDrawer} />
-        <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
-        <Stack.Screen name="MakeOffer" component={MakeOfferScreen} />
-        <Stack.Screen name="OwnerOfferDetails" component={OwnerOfferDetailsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <WebMobileFrame>
+      <NavigationContainer>
+        <Stack.Navigator
+          screenOptions={{ headerShown: false }}
+          initialRouteName={isAuthed ? 'Main' : 'Splash'}
+        >
+          <Stack.Screen name="Splash" component={SplashScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <Stack.Screen name="VerifyOtp" component={VerifyOtpScreen} />
+          <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+          <Stack.Screen name="PasswordChangedSuccess" component={PasswordChangedSuccessScreen} />
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Main" component={MainDrawer} />
+          <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
+          <Stack.Screen name="MakeOffer" component={MakeOfferScreen} />
+          <Stack.Screen name="OwnerOfferDetails" component={OwnerOfferDetailsScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </WebMobileFrame>
   );
 }
+
+const styles = StyleSheet.create({
+  webPage: {
+    width: '100%',
+    backgroundColor: '#0b0f19',
+  },
+  webPageContent: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    flexGrow: 1,
+  },
+  webFrameSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webFrame: {
+    width: 412,
+    height: 915,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 20,
+  },
+  webFrameInner: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+});

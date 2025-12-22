@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   Dimensions,
@@ -12,21 +11,234 @@ import {
   Linking,
   Alert,
   Modal,
+  LayoutAnimation,
   Platform,
+  UIManager,
+  Image,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import theme from '../theme';
 import PropertyImageSlider from '../components/PropertyImageSlider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSessionUser } from '../session';
+import { API_BASE_URL } from '../apiBaseUrl';
 
-const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
-const RENDER_BASE_URL = 'https://apiv2-pnmqz54req-uc.a.run.app';
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
+
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
+const OFFER_SUBMISSIONS_KEY = 'OFFER_SUBMISSIONS_V1';
 
 const { width, height } = Dimensions.get('window');
+
+const tenantStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#F3F4F6' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
+  iconBtn: { padding: 6 },
+  headerActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  imageWrap: { margin: 16, borderRadius: 20, overflow: 'hidden' },
+  image: { width: '100%', height: 240 },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  titleBlock: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  propertyName: { fontSize: 22, fontWeight: '800' },
+  address: { color: '#6b7280', marginTop: 4 },
+  price: { fontSize: 22, fontWeight: '800', color: '#2563EB' },
+  perMonth: { fontSize: 12, color: '#6b7280' },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20 },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  card: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  cardTitleRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  cardTitle: { fontSize: 16, fontWeight: '800' },
+  cardBody: { padding: 16, gap: 12 },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderColor: '#f1f5f9',
+    paddingBottom: 8,
+  },
+  infoLabel: { color: '#6b7280' },
+  infoValue: { fontWeight: '600' },
+  highlight: {
+    color: '#2563EB',
+    fontWeight: '800',
+  },
+  amenities: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  amenity: {
+    flexDirection: 'row',
+    gap: 6,
+    padding: 8,
+    backgroundColor: '#f9fafb',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+  },
+  amenityText: { fontWeight: '600' },
+  ruleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  ruleLabel: { color: '#6b7280' },
+  allowed: {
+    color: '#16a34a',
+    fontWeight: '800',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  subHeading: { fontWeight: '700', marginBottom: 8 },
+  ruleBox: {
+    backgroundColor: '#f9fafb',
+    padding: 12,
+    borderRadius: 10,
+  },
+  ruleText: { color: '#374151', fontSize: 13, marginBottom: 4 },
+  addressFull: {
+    padding: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  mapPreview: {
+    margin: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
+  },
+  mapImage: { width: '100%', height: 140 },
+  mapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapBtn: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    fontWeight: '700',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 14,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  actionText: { fontSize: 12, fontWeight: '600', color: '#4b5563' },
+  primaryAction: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  primaryText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+});
+
+const TenantSection = ({ title, icon, iconColor, children, defaultOpen = true }) => {
+  const [open, setOpen] = useState(defaultOpen);
+
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen(!open);
+  };
+
+  return (
+    <View style={tenantStyles.card}>
+      <TouchableOpacity style={tenantStyles.cardHeader} onPress={toggle}>
+        <View style={tenantStyles.cardTitleRow}>
+          <MaterialIcons name={icon} size={22} color={iconColor} />
+          <Text style={tenantStyles.cardTitle}>{title}</Text>
+        </View>
+        <MaterialIcons
+          name="expand-more"
+          size={22}
+          style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
+          color="#9ca3af"
+        />
+      </TouchableOpacity>
+
+      {open && <View style={tenantStyles.cardBody}>{children}</View>}
+    </View>
+  );
+};
+
+const tenantBadge = (text, bg, color) => (
+  <View style={[tenantStyles.badge, { backgroundColor: bg }]}>
+    <Text style={[tenantStyles.badgeText, { color }]}>{text}</Text>
+  </View>
+);
+
+const tenantInfoRow = (label, value, highlight = false) => (
+  <View style={tenantStyles.infoRow} key={label}>
+    <Text style={tenantStyles.infoLabel}>{label}</Text>
+    <Text style={[tenantStyles.infoValue, highlight ? tenantStyles.highlight : null]}>{value}</Text>
+  </View>
+);
+
+const tenantAmenity = (label) => (
+  <View key={label} style={tenantStyles.amenity}>
+    <MaterialIcons name="check-circle" size={18} color="#10B981" />
+    <Text style={tenantStyles.amenityText}>{label}</Text>
+  </View>
+);
+
+const tenantAction = (icon, label, onPress) => (
+  <TouchableOpacity key={label} style={tenantStyles.actionBtn} onPress={onPress}>
+    <MaterialIcons name={icon} size={22} color="#6b7280" />
+    <Text style={tenantStyles.actionText}>{label}</Text>
+  </TouchableOpacity>
+);
 
 export default function PropertyDetailsScreen({ route, navigation }) {
   const passedProperty = route?.params?.property || {};
@@ -68,6 +280,16 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   const resolvedRole = roleFromParams || sessionRole || storedRole;
   const isTenant = resolvedRole === 'tenant' || resolvedRole === 'tenent';
 
+  const [sessionUserId, setSessionUserId] = useState(null);
+  const propertyId = property?._id || property?.id || property?.propertyId || null;
+  const submissionKey = useMemo(() => {
+    const pid = propertyId ? String(propertyId) : 'unknown_property';
+    const uid = sessionUserId ? String(sessionUserId) : String(route?.params?.userId || 'unknown_user');
+    return `${uid}::${pid}`;
+  }, [propertyId, route?.params?.userId, sessionUserId]);
+
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+
   React.useEffect(() => {
     let mounted = true;
     const loadRole = async () => {
@@ -78,11 +300,54 @@ export default function PropertyDetailsScreen({ route, navigation }) {
         setStoredRole(String(user?.role || '').trim().toLowerCase());
       } catch (e) {}
     };
+
     loadRole();
     return () => {
       mounted = false;
     };
   }, []);
+
+  React.useEffect(() => {
+    let mounted = true;
+    const loadUid = async () => {
+      try {
+        const session = await getSessionUser();
+        const uid = session?._id || session?.id || session?.user?._id || session?.user?.id || null;
+        if (mounted) setSessionUserId(uid);
+      } catch (e) {
+        if (mounted) setSessionUserId(null);
+      }
+    };
+    loadUid();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let mounted = true;
+    const loadSubmitted = async () => {
+      try {
+        if (!isTenant) {
+          if (mounted) setAlreadySubmitted(false);
+          return;
+        }
+        const json = await AsyncStorage.getItem(OFFER_SUBMISSIONS_KEY);
+        const map = json ? JSON.parse(json) : {};
+        const safe = map && typeof map === 'object' ? map : {};
+        const uid = String(submissionKey.split('::')[0] || '');
+        const scoped = safe?.byUser && typeof safe.byUser === 'object' ? safe.byUser?.[uid] : null;
+        const hasSubmitted = !!(scoped && typeof scoped === 'object' ? scoped?.[submissionKey] : safe?.[submissionKey]);
+        if (mounted) setAlreadySubmitted(hasSubmitted);
+      } catch (e) {
+        if (mounted) setAlreadySubmitted(false);
+      }
+    };
+    loadSubmitted();
+    return () => {
+      mounted = false;
+    };
+  }, [isTenant, submissionKey]);
 
   const photos = Array.isArray(property.photos) ? property.photos : [];
 
@@ -131,6 +396,25 @@ export default function PropertyDetailsScreen({ route, navigation }) {
   const ownerParkingType = String(property.parkingType || 'none').trim().toLowerCase();
   const ownerAllowsBike = ownerParkingType === 'bike' || ownerParkingType === 'both';
   const ownerAllowsCar = ownerParkingType === 'car' || ownerParkingType === 'both';
+
+  const resolveImageUri = (raw) => {
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      const s = raw.trim();
+      if (!s) return null;
+      if (s.startsWith('http://') || s.startsWith('https://')) return s;
+      const path = s.startsWith('/') ? s : `/${s}`;
+      return `${API_BASE_URL}${path}`;
+    }
+    if (typeof raw === 'object') {
+      if (typeof raw.uri === 'string') return resolveImageUri(raw.uri);
+      if (typeof raw.url === 'string') return resolveImageUri(raw.url);
+      if (typeof raw.path === 'string') return resolveImageUri(raw.path);
+    }
+    return null;
+  };
+
+  const heroImage = resolveImageUri(photos?.[0]) || null;
 
   const getAuthHeaders = async () => {
     const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
@@ -222,6 +506,41 @@ export default function PropertyDetailsScreen({ route, navigation }) {
     navigation.navigate('MakeOffer', { property });
   };
 
+  const handleResubmitOffer = () => {
+    navigation.navigate('MakeOffer', { property });
+  };
+
+  const handleWithdrawOffer = () => {
+    Alert.alert('Withdraw Offer', 'Do you want to withdraw your submitted offer?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Withdraw',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const json = await AsyncStorage.getItem(OFFER_SUBMISSIONS_KEY);
+            const map = json ? JSON.parse(json) : {};
+            const safe = map && typeof map === 'object' ? map : {};
+            const uid = String(submissionKey.split('::')[0] || '');
+            const next = { ...safe };
+            if (next.byUser && typeof next.byUser === 'object' && next.byUser[uid] && typeof next.byUser[uid] === 'object') {
+              const scoped = { ...next.byUser[uid] };
+              delete scoped[submissionKey];
+              next.byUser = { ...next.byUser, [uid]: scoped };
+            } else {
+              delete next[submissionKey];
+            }
+            await AsyncStorage.setItem(OFFER_SUBMISSIONS_KEY, JSON.stringify(next));
+            setAlreadySubmitted(false);
+            Alert.alert('Offer', 'Offer withdrawn locally.');
+          } catch (e) {
+            Alert.alert('Offer', 'Unable to withdraw offer right now.');
+          }
+        },
+      },
+    ]);
+  };
+
   const submitOffer = async () => {
     console.log('[submitOffer] clicked');
     if (submittingOffer) return;
@@ -301,6 +620,152 @@ export default function PropertyDetailsScreen({ route, navigation }) {
       setSubmittingOffer(false);
     }
   };
+
+  if (isTenant) {
+    const priceLabel = property?.rentAmount ? `₹${property.rentAmount}` : '-';
+    const addressLabel = String(property?.address || property?.floor || property?.customFloor || '').trim();
+    const categoryLabel = String(property?.category || typeLabel || 'Property').trim();
+    const amenitiesList = Array.isArray(property?.amenities) ? property.amenities : [];
+    const fullAddress = String(property?.address || '').trim();
+    const mapLocation = String(property?.mapLocation || '').trim();
+
+    return (
+      <View style={tenantStyles.root}>
+        <View style={tenantStyles.header}>
+          <TouchableOpacity style={tenantStyles.iconBtn} onPress={() => navigation.goBack()}>
+            <MaterialIcons name="arrow-back" size={22} />
+          </TouchableOpacity>
+
+          <Text style={tenantStyles.headerTitle}>Property details</Text>
+
+          <View style={tenantStyles.headerActions}>
+            {propertyList && propertyList.length > 1 ? (
+              <>
+                <TouchableOpacity
+                  style={tenantStyles.iconBtn}
+                  onPress={() => setCurrentIndex((prev) => (prev > 0 ? prev - 1 : prev))}
+                >
+                  <MaterialIcons name="arrow-back-ios" size={18} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={tenantStyles.iconBtn}
+                  onPress={() =>
+                    setCurrentIndex((prev) =>
+                      propertyList && prev < propertyList.length - 1 ? prev + 1 : prev,
+                    )
+                  }
+                >
+                  <MaterialIcons name="arrow-forward-ios" size={18} />
+                </TouchableOpacity>
+              </>
+            ) : null}
+            <TouchableOpacity style={tenantStyles.iconBtn} onPress={() => navigation.goBack()}>
+              <MaterialIcons name="close" size={22} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+          <View style={tenantStyles.imageWrap}>
+            {heroImage ? (
+              <Image source={{ uri: heroImage }} style={tenantStyles.image} />
+            ) : (
+              <View style={[tenantStyles.image, { backgroundColor: '#e5e7eb' }]} />
+            )}
+            <View style={tenantStyles.imageOverlay} />
+          </View>
+
+          <View style={tenantStyles.titleBlock}>
+            <View style={{ flex: 1 }}>
+              <Text style={tenantStyles.propertyName}>{title}</Text>
+              <Text style={tenantStyles.address}>{addressLabel || '-'}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={tenantStyles.price}>{priceLabel}</Text>
+              <Text style={tenantStyles.perMonth}>/ month</Text>
+            </View>
+          </View>
+
+          <View style={tenantStyles.badges}>
+            {alreadySubmitted ? tenantBadge('Already Submitted', '#FEF3C7', '#92400E') : null}
+            {tenantBadge(statusLabel, statusBoxColor, statusTextColor)}
+            {tenantBadge(categoryLabel, '#DBEAFE', '#1E40AF')}
+          </View>
+
+          <TenantSection title="Property Details" icon="info" iconColor="#2563EB">
+            {tenantInfoRow('Name', String(property?.propertyName || '-'))}
+            {tenantInfoRow('Category', String(property?.category || '-'))}
+            {tenantInfoRow('Listing Type', String(property?.listingType || property?.listingFor || '-'), true)}
+            {tenantInfoRow('Mode', String(property?.mode || '-'))}
+            {tenantInfoRow('Configuration', property?.bhk ? `${property.bhk} BHK` : String(property?.configuration || '-'))}
+            {tenantInfoRow('Furnishing', String(property?.furnishing || '-'))}
+            {tenantInfoRow('Floor', String(property?.floor || property?.customFloor || '-'))}
+            {tenantInfoRow('Total Rooms', String(property?.totalRooms || property?.rooms || '-'))}
+          </TenantSection>
+
+          <TenantSection title="Amenities" icon="inventory-2" iconColor="#10B981">
+            <View style={tenantStyles.amenities}>
+              {(amenitiesList.length ? amenitiesList : ['No amenities']).map((x) => tenantAmenity(String(x)))}
+            </View>
+          </TenantSection>
+
+          <TenantSection title="Financials & Booking" icon="payments" iconColor="#2563EB">
+            {tenantInfoRow('Advance Amount', advanceAmount, true)}
+            {tenantInfoRow(
+              'Booking Validity',
+              property?.bookingValidityDays ? `${property.bookingValidityDays} Days` : 'Not set',
+            )}
+          </TenantSection>
+
+          <TenantSection title="Rules & Conditions" icon="gavel" iconColor="#F97316">
+            <View style={tenantStyles.ruleRow}>
+              <Text style={tenantStyles.ruleLabel}>Friends/Relatives</Text>
+              <Text style={tenantStyles.allowed}>{property?.friendsAllowed === false ? 'Not allowed' : 'Allowed'}</Text>
+            </View>
+            <Text style={tenantStyles.subHeading}>Owner's Rules</Text>
+            <View style={tenantStyles.ruleBox}>
+              {(rulesSummary.length ? rulesSummary : ['Rules not specified']).map((r) => (
+                <Text key={String(r)} style={tenantStyles.ruleText}>
+                  • {String(r)}
+                </Text>
+              ))}
+            </View>
+          </TenantSection>
+
+          <View style={tenantStyles.card}>
+            <View style={{ padding: 16 }}>
+              <Text style={tenantStyles.cardTitle}>Address & Location</Text>
+            </View>
+            <Text style={tenantStyles.addressFull}>{fullAddress || addressLabel || '-'}</Text>
+
+            <TouchableOpacity style={tenantStyles.mapPreview} onPress={handleOpenMap} disabled={!mapLocation}>
+              <View style={[tenantStyles.mapImage, { backgroundColor: '#cbd5e1' }]} />
+              <View style={tenantStyles.mapOverlay}>
+                <Text style={tenantStyles.mapBtn}>📍 View Location</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        <View style={tenantStyles.bottomBar}>
+          {tenantAction('call', 'Call', handleCall)}
+          {tenantAction('chat', 'Chat', handleChat)}
+          {alreadySubmitted ? tenantAction('cancel', 'Withdraw', handleWithdrawOffer) : null}
+          {alreadySubmitted ? (
+            <TouchableOpacity style={[tenantStyles.actionBtn, tenantStyles.primaryAction]} onPress={handleResubmitOffer}>
+              <MaterialIcons name="refresh" size={22} color="#fff" />
+              <Text style={tenantStyles.primaryText}>Resubmit</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={[tenantStyles.actionBtn, tenantStyles.primaryAction]} onPress={handleMakeOffer}>
+              <MaterialIcons name="send" size={22} color="#fff" />
+              <Text style={tenantStyles.primaryText}>Make Offer</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -387,17 +852,28 @@ export default function PropertyDetailsScreen({ route, navigation }) {
               {!!address && (
                 <Text style={styles.subtitleText}>{address}</Text>
               )}
-              <Text style={styles.subtitleText}>{typeLabel}</Text>
             </View>
-            <View
-              style={[
-                styles.statusBox,
-                { backgroundColor: statusBoxColor },
-              ]}
-            >
-              <Text style={[styles.statusText, { color: statusTextColor }]}>
-                {statusLabel}
-              </Text>
+            <View style={styles.titleRightWrap}>
+              {isTenant && alreadySubmitted ? (
+                <View style={styles.submittedTag}>
+                  <Text style={styles.submittedTagText}>Already Submitted</Text>
+                </View>
+              ) : null}
+              <View
+                style={[
+                  styles.statusBox,
+                  { backgroundColor: statusBoxColor },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: statusTextColor },
+                  ]}
+                >
+                  {statusLabel}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -756,17 +1232,34 @@ export default function PropertyDetailsScreen({ route, navigation }) {
         {/* Bottom fixed actions */}
         <View style={styles.bottomBar}>
           {isTenant ? (
-            <View style={styles.tenantActionsRow}>
-              <TouchableOpacity style={styles.tenantBtn} onPress={handleCall}>
-                <Text style={styles.tenantBtnText}>Call</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tenantBtn} onPress={handleChat}>
-                <Text style={styles.tenantBtnText}>Chat</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tenantBtnPrimary} onPress={handleMakeOffer}>
-                <Text style={styles.tenantBtnPrimaryText}>Make Offer</Text>
-              </TouchableOpacity>
-            </View>
+            alreadySubmitted ? (
+              <View style={styles.tenantActionsRow}>
+                <TouchableOpacity style={styles.tenantBtn} onPress={handleCall}>
+                  <Text style={styles.tenantBtnText}>Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tenantBtn} onPress={handleChat}>
+                  <Text style={styles.tenantBtnText}>Chat</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tenantBtn} onPress={handleWithdrawOffer}>
+                  <Text style={styles.tenantBtnText}>Withdraw</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tenantBtnPrimary} onPress={handleResubmitOffer}>
+                  <Text style={styles.tenantBtnPrimaryText}>Resubmit</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.tenantActionsRow}>
+                <TouchableOpacity style={styles.tenantBtn} onPress={handleCall}>
+                  <Text style={styles.tenantBtnText}>Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tenantBtn} onPress={handleChat}>
+                  <Text style={styles.tenantBtnText}>Chat</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.tenantBtnPrimary} onPress={handleMakeOffer}>
+                  <Text style={styles.tenantBtnPrimaryText}>Make Offer</Text>
+                </TouchableOpacity>
+              </View>
+            )
           ) : (
             <TouchableOpacity style={styles.primaryBtn}>
               <Text style={styles.primaryBtnText}>Manage Property</Text>
@@ -834,6 +1327,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  titleRightWrap: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  submittedTag: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#ffe69c',
+  },
+  submittedTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7a5b00',
   },
   titleText: {
     fontSize: 18,

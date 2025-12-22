@@ -1,7 +1,13 @@
 const Property = require('../models/Property');
 
 async function createProperty(ownerId, payload) {
-  const property = new Property({ ...payload, ownerId });
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const property = new Property({
+    ...safePayload,
+    ownerId,
+    visibleForTenants:
+      typeof safePayload.visibleForTenants === 'boolean' ? safePayload.visibleForTenants : true,
+  });
   return property.save();
 }
 
@@ -22,7 +28,7 @@ async function listProperties(ownerId) {
 }
 
 async function listTenantVisibleProperties() {
-  return Property.find({ status: 'available' }).sort({ createdAt: -1 });
+  return Property.find({ status: 'available', visibleForTenants: true }).sort({ createdAt: -1 });
 }
 
 async function deleteProperty(ownerId, id) {

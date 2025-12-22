@@ -7,6 +7,13 @@
   },
   "main": "index.js",
   "type": "commonjs",
+
+ "scripts": {
+    "start": "node index.js",
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",

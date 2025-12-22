@@ -1,14 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import ScreenLayout from '../layouts/ScreenLayout';
 import theme from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL } from '../apiBaseUrl';
 
-const LOCAL_DEV_BASE_URL = Platform.OS === 'web' ? 'http://localhost:5000' : 'http://10.0.2.2:5000';
-const RENDER_BASE_URL = 'https://apiv2-pnmqz54req-uc.a.run.app';
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? LOCAL_DEV_BASE_URL : RENDER_BASE_URL);
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
 
