@@ -1,6 +1,10 @@
 {
   "expo": {
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "name": "frontend",
     "slug": "frontend",
     "version": "1.0.0",
@@ -28,6 +32,9 @@
       "meta": {
         "viewport": "width=device-width, initial-scale=1, viewport-fit=cover"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

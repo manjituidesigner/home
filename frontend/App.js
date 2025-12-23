@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
+import { useFonts } from 'expo-font';
+import { Roboto_400Regular, Roboto_500Medium, Roboto_700Bold } from '@expo-google-fonts/roboto';
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import CreateAccountScreen from './screens/CreateAccountScreen';
@@ -16,6 +18,7 @@ import DashboardScreen from './screens/DashboardScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import PropertyScreen from './screens/PropertyScreen';
 import PropertyDetailsScreen from './screens/PropertyDetailsScreen';
+import PropertyPreviewScreen from './screens/PropertyPreviewScreen';
 import WishlistScreen from './screens/WishlistScreen';
 import TenentsScreen from './screens/TenentsScreen';
 import PaymentsScreen from './screens/PaymentsScreen';
@@ -50,27 +53,48 @@ function WebMobileFrame({ children }) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
+    const html = document?.documentElement;
+    const body = document?.body;
+    const prevHtmlOverflow = html?.style?.overflow;
+    const prevBodyOverflow = body?.style?.overflow;
+    const prevBodyMargin = body?.style?.margin;
+
+    if (html?.style) html.style.overflow = 'hidden';
+    if (body?.style) {
+      body.style.overflow = 'hidden';
+      body.style.margin = '0';
+    }
+
     const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', onResize);
     onResize();
 
-    return () => window.removeEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (html?.style) html.style.overflow = prevHtmlOverflow || '';
+      if (body?.style) {
+        body.style.overflow = prevBodyOverflow || '';
+        body.style.margin = prevBodyMargin || '';
+      }
+    };
   }, []);
 
   if (Platform.OS !== 'web') return children;
 
+  const frameHeight = viewport.height
+    ? Math.max(0, Math.min(915, viewport.height - 40))
+    : 915;
+
   return (
-    <ScrollView
-      style={[styles.webPage, viewport.height ? { height: viewport.height } : null]}
-      contentContainerStyle={styles.webPageContent}
-      showsVerticalScrollIndicator
-    >
-      <View style={styles.webFrameSlot}>
-        <View style={styles.webFrame}>
-          <View style={styles.webFrameInner}>{children}</View>
+    <View style={[styles.webPage, viewport.height ? { height: viewport.height } : null]}>
+      <View style={styles.webPageContent}>
+        <View style={styles.webFrameSlot}>
+          <View style={[styles.webFrame, { height: frameHeight }]}>
+            <View style={styles.webFrameInner}>{children}</View>
+          </View>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -102,6 +126,27 @@ function MainDrawer() {
 export default function App() {
   const [bootstrapped, setBootstrapped] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
+
+  const [fontsLoaded] = useFonts({
+    Roboto_400Regular,
+    Roboto_500Medium,
+    Roboto_700Bold,
+  });
+
+  const defaultTextProps = useMemo(
+    () => ({
+      ...(Text.defaultProps || {}),
+      style: [
+        { fontFamily: 'Roboto_400Regular' },
+        ...(Array.isArray(Text.defaultProps?.style) ? Text.defaultProps.style : Text.defaultProps?.style ? [Text.defaultProps.style] : []),
+      ],
+    }),
+    []
+  );
+
+  useEffect(() => {
+    Text.defaultProps = defaultTextProps;
+  }, [defaultTextProps]);
 
   useEffect(() => {
     let mounted = true;
@@ -147,7 +192,7 @@ export default function App() {
     };
   }, []);
 
-  if (!bootstrapped) return null;
+  if (!bootstrapped || !fontsLoaded) return null;
 
   return (
     <WebMobileFrame>
@@ -166,6 +211,7 @@ export default function App() {
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Main" component={MainDrawer} />
           <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
+          <Stack.Screen name="PropertyPreview" component={PropertyPreviewScreen} />
           <Stack.Screen name="MakeOffer" component={MakeOfferScreen} />
           <Stack.Screen name="OwnerOfferDetails" component={OwnerOfferDetailsScreen} />
         </Stack.Navigator>
@@ -178,13 +224,14 @@ const styles = StyleSheet.create({
   webPage: {
     width: '100%',
     backgroundColor: '#0b0f19',
+    overflow: 'hidden',
   },
   webPageContent: {
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingVertical: 20,
     paddingHorizontal: 20,
-    flexGrow: 1,
+    flex: 1,
   },
   webFrameSlot: {
     alignItems: 'center',

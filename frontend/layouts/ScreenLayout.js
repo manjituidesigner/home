@@ -15,6 +15,7 @@ export default function ScreenLayout({
   title,
   subtitle,
   children,
+  headerLeft,
   headerRight,
   onPressMenu,
   showHeader = true,
@@ -26,8 +27,14 @@ export default function ScreenLayout({
       {showHeader && (
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
-            <View style={styles.logoWrapper}>
-              <HomeIcon width={22} height={22} />
+            <View style={styles.headerLeftGroup}>
+              {headerLeft ? (
+                headerLeft
+              ) : (
+                <View style={styles.logoWrapper}>
+                  <HomeIcon width={22} height={22} />
+                </View>
+              )}
             </View>
             <View style={styles.headerTitleBlock}>
               <Text style={styles.headerTitle}>{title}</Text>
@@ -91,6 +98,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  headerLeftGroup: {
+    width: 38,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   logoWrapper: {
     width: 38,

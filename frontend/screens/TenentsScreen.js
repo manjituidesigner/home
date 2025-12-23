@@ -167,7 +167,7 @@ export default function TenentsScreen({ navigation }) {
         }
       }}
     >
-      <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.container}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Tenant Listing</Text>
           <TouchableOpacity
@@ -197,78 +197,86 @@ export default function TenentsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {!filteredCards.length ? (
-          <Text style={styles.subtitle}>
-            {tab === 'active' ? 'No active tenants yet.' : 'No inactive tenants yet.'}
-          </Text>
-        ) : (
-          <View style={styles.listWrap}>
-            {filteredCards.map((c) => {
-              const propName = String(c?.property?.propertyName || '').trim();
-              const tenantName = c?.tenantName || String(c?.tenant?.username || 'Tenant').trim();
-              const ownerVerifiedAt = formatDateTime(c?.tx?.ownerVerifiedAt);
-              return (
-                <View key={c.key} style={styles.card}>
-                  <View style={styles.cardTopRow}>
-                    <View style={styles.imageWrap}>
-                      {c.imageUrl ? (
-                        <Image source={{ uri: c.imageUrl }} style={styles.image} />
-                      ) : (
-                        <View style={styles.imageFallback} />
-                      )}
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          {!filteredCards.length ? (
+            <Text style={styles.subtitle}>
+              {tab === 'active' ? 'No active tenants yet.' : 'No inactive tenants yet.'}
+            </Text>
+          ) : (
+            <View style={styles.listWrap}>
+              {filteredCards.map((c) => {
+                const propName = String(c?.property?.propertyName || '').trim();
+                const tenantName = c?.tenantName || String(c?.tenant?.username || 'Tenant').trim();
+                const ownerVerifiedAt = formatDateTime(c?.tx?.ownerVerifiedAt);
+                return (
+                  <View key={c.key} style={styles.card}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.imageWrap}>
+                        {c.imageUrl ? (
+                          <Image source={{ uri: c.imageUrl }} style={styles.image} />
+                        ) : (
+                          <View style={styles.imageFallback} />
+                        )}
+                      </View>
+                      <View style={styles.cardMeta}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>
+                          {propName || 'Property'}
+                        </Text>
+                        <Text style={styles.cardSub} numberOfLines={1}>
+                          Tenant: {tenantName}
+                        </Text>
+                        <Text style={styles.cardSub}>Booking Amount: {moneyLabel(c?.tx?.amount, '-')}</Text>
+                        <Text style={styles.cardSub}>Verified: {ownerVerifiedAt}</Text>
+                        <Text style={styles.cardSub}>Status: {c?.movedIn ? 'Active' : 'Inactive'}</Text>
+                      </View>
                     </View>
-                    <View style={styles.cardMeta}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>
-                        {propName || 'Property'}
-                      </Text>
-                      <Text style={styles.cardSub} numberOfLines={1}>
-                        Tenant: {tenantName}
-                      </Text>
-                      <Text style={styles.cardSub}>Booking Amount: {moneyLabel(c?.tx?.amount, '-')}</Text>
-                      <Text style={styles.cardSub}>Verified: {ownerVerifiedAt}</Text>
-                      <Text style={styles.cardSub}>Status: {c?.movedIn ? 'Active' : 'Inactive'}</Text>
-                    </View>
-                  </View>
 
-                  <TouchableOpacity
-                    style={styles.primaryBtn}
-                    onPress={() => {
-                      navigation.navigate('Agreement', {
-                        source: 'make_agreement',
-                        offer: c.offer,
-                        property: c.property,
-                        tenant: c.tenant,
-                        bookingTx: c.tx,
-                      });
-                    }}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.primaryBtnText}>Make Agreement</Text>
-                  </TouchableOpacity>
-
-                  {!c?.movedIn ? (
                     <TouchableOpacity
-                      style={[styles.secondaryBtn, loading ? styles.btnDisabled : null]}
-                      onPress={() => confirmMoveIn(c.offerId)}
+                      style={styles.primaryBtn}
+                      onPress={() => {
+                        navigation.navigate('Agreement', {
+                          source: 'make_agreement',
+                          offer: c.offer,
+                          property: c.property,
+                          tenant: c.tenant,
+                          bookingTx: c.tx,
+                        });
+                      }}
                       activeOpacity={0.9}
-                      disabled={loading}
                     >
-                      <Text style={styles.secondaryBtnText}>Confirm Move-In</Text>
+                      <Text style={styles.primaryBtnText}>Make Agreement</Text>
                     </TouchableOpacity>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        )}
-      </ScrollView>
+
+                    {!c?.movedIn ? (
+                      <TouchableOpacity
+                        style={[styles.secondaryBtn, loading ? styles.btnDisabled : null]}
+                        onPress={() => confirmMoveIn(c.offerId)}
+                        activeOpacity={0.9}
+                        disabled={loading}
+                      >
+                        <Text style={styles.secondaryBtnText}>Confirm Move-In</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </View>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     padding: 16,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingBottom: 30,
   },
   headerRow: {
