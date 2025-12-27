@@ -50,6 +50,7 @@ function ensureRoutesMounted() {
   // NOTE: index.js is inside /functions
   // routes are inside /src/routes
   app.use("/properties", require("./src/routes/propertyRoutes"));
+  app.use("/property-drafts", require("./src/routes/propertyDraftRoutes"));
   app.use("/auth", require("./src/routes/authRoutes"));
   app.use("/users", require("./src/routes/userRoutes"));
   app.use("/offers", require("./src/routes/offerRoutes"));

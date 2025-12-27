@@ -20,6 +20,7 @@ export default function ScreenLayout({
   onPressMenu,
   showHeader = true,
   showSearchRow = false,
+  contentStyle,
 }) {
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -77,7 +78,7 @@ export default function ScreenLayout({
           )}
         </View>
       )}
-      <View style={styles.content}>{children}</View>
+      <View style={[styles.content, contentStyle]}>{children}</View>
     </SafeAreaView>
   );
 }
@@ -186,6 +187,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minHeight: 0,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     backgroundColor: theme.colors.background,

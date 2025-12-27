@@ -81,9 +81,7 @@ function WebMobileFrame({ children }) {
 
   if (Platform.OS !== 'web') return children;
 
-  const frameHeight = viewport.height
-    ? Math.max(0, Math.min(915, viewport.height - 40))
-    : 915;
+  const frameHeight = viewport.height ? Math.max(0, viewport.height - 40) : 640;
 
   return (
     <View style={[styles.webPage, viewport.height ? { height: viewport.height } : null]}>
@@ -117,7 +115,6 @@ function MainDrawer() {
       <Drawer.Screen name="Docs" component={DocsScreen} />
       <Drawer.Screen name="Agreement" component={AgreementScreen} />
       <Drawer.Screen name="Chat" component={ChatScreen} />
-      <Drawer.Screen name="Ads" component={AdsScreen} />
       <Drawer.Screen name="subscription" component={SubscriptionScreen} />
     </Drawer.Navigator>
   );
@@ -210,6 +207,7 @@ export default function App() {
           <Stack.Screen name="PasswordChangedSuccess" component={PasswordChangedSuccessScreen} />
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Main" component={MainDrawer} />
+          <Stack.Screen name="Ads" component={AdsScreen} />
           <Stack.Screen name="PropertyDetails" component={PropertyDetailsScreen} />
           <Stack.Screen name="PropertyPreview" component={PropertyPreviewScreen} />
           <Stack.Screen name="MakeOffer" component={MakeOfferScreen} />
@@ -238,7 +236,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   webFrame: {
-    width: 412,
+    width: 360,
     height: 915,
     backgroundColor: '#ffffff',
     overflow: 'hidden',

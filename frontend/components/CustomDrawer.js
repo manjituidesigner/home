@@ -86,7 +86,7 @@ export default function CustomDrawer(props) {
         { key: 'Offers', label: 'Offers', icon: '\ud83d\udce9' },
         { key: 'Settings', label: 'Settings', icon: '\u2699' },
         { key: 'Documents', label: 'Documents', icon: '\ud83d\udcc4' },
-        { key: 'Ads', label: 'Ads', icon: '\ud83d\udce2' },
+        { key: 'Ads', label: 'Property Ads', icon: '\ud83d\udce2' },
         { key: 'subscription', label: 'Subscription', icon: '\u2605' },
         { key: 'Logout', label: 'Logout', icon: '\u23cb' },
       ];

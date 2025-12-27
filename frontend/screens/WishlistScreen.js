@@ -52,7 +52,7 @@ export default function WishlistScreen({ navigation }) {
         }
       }}
     >
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {list.length === 0 ? (
           <Text style={styles.subtitle}>No properties added to wishlist yet.</Text>
         ) : (
@@ -112,7 +112,11 @@ export default function WishlistScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   container: {
+    flexGrow: 1,
     marginTop: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.xl,

@@ -332,7 +332,7 @@ export default function DashboardScreen({ navigation }) {
     >
       <View style={styles.root}>
         <LoadingOverlay visible={loadingFeed} />
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         {normalizedRole === 'tenant' ? (
           <View style={styles.feedBlock}>
             <View style={styles.tenantSearchWrap}>
@@ -776,6 +776,16 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  body: {
+    flexGrow: 1,
+    paddingBottom: 24,
+  },
   ownerNewRoot: {
     paddingTop: 12,
     paddingBottom: 12,
