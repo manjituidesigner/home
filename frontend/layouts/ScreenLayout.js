@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import { DrawerActions, useNavigation } from '@react-navigation/native';
 import theme from '../theme';
 import HomeIcon from '../assets/home-icon.svg';
 
@@ -22,6 +23,43 @@ export default function ScreenLayout({
   showSearchRow = false,
   contentStyle,
 }) {
+  const navigation = useNavigation();
+
+  const handleMenuPress = () => {
+    try {
+      const byId = navigation?.getParent ? navigation.getParent('MainDrawer') : null;
+      if (byId?.toggleDrawer) {
+        byId.toggleDrawer();
+        return;
+      }
+      if (byId?.dispatch) {
+        byId.dispatch(DrawerActions.toggleDrawer());
+        return;
+      }
+    } catch (e) {}
+
+    let nav = navigation;
+    for (let i = 0; i < 6; i += 1) {
+      if (nav?.toggleDrawer) {
+        try {
+          nav.toggleDrawer();
+        } catch (e) {}
+        return;
+      }
+      if (nav?.dispatch) {
+        try {
+          nav.dispatch(DrawerActions.toggleDrawer());
+          return;
+        } catch (e) {}
+      }
+      if (nav?.getParent) {
+        nav = nav.getParent();
+        continue;
+      }
+      break;
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
@@ -47,11 +85,12 @@ export default function ScreenLayout({
             </View>
             <View style={styles.headerRightGroup}>
               {headerRight}
-              {onPressMenu ? (
-                <TouchableOpacity style={styles.iconButton} onPress={onPressMenu}>
-                  <Text style={styles.iconLabel}>≡</Text>
-                </TouchableOpacity>
-              ) : null}
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={handleMenuPress}
+              >
+                <Text style={styles.iconLabel}>≡</Text>
+              </TouchableOpacity>
             </View>
           </View>
           {showSearchRow && (

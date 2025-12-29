@@ -257,7 +257,11 @@ export default function AgreementScreen({ navigation, route }) {
     <ScreenLayout
       title="Agreement"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

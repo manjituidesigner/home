@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,70 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Modal,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_BASE_URL } from "../apiBaseUrl";
+
+const AUTH_TOKEN_STORAGE_KEY = "AUTH_TOKEN";
 
 export default function PropertyPreviewScreen({ route, navigation }) {
   const property = route?.params?.property || {};
+
+  const [publishing, setPublishing] = useState(false);
+  const [publishSuccessVisible, setPublishSuccessVisible] = useState(false);
+
+  const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const publishProperty = async () => {
+    if (publishing) return;
+    setPublishing(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const createDraftResp = await fetch(`${API_BASE_URL}/property-drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify(property),
+      });
+      if (!createDraftResp.ok) {
+        let msg = "Failed to save draft";
+        try {
+          const body = await createDraftResp.json();
+          if (body?.message) msg = body.message;
+          if (body?.error) msg = `${msg}: ${body.error}`;
+        } catch (e) {}
+        throw new Error(msg);
+      }
+      const draft = await createDraftResp.json().catch(() => ({}));
+      const draftId = draft?._id;
+      if (!draftId) throw new Error("Draft not created");
+
+      const publishResp = await fetch(`${API_BASE_URL}/property-drafts/${draftId}/publish`, {
+        method: "POST",
+        headers: { ...authHeaders },
+      });
+      if (!publishResp.ok) {
+        let msg = "Failed to publish property";
+        try {
+          const body = await publishResp.json();
+          if (body?.message) msg = body.message;
+          if (body?.error) msg = `${msg}: ${body.error}`;
+        } catch (e) {}
+        throw new Error(msg);
+      }
+
+      setPublishSuccessVisible(true);
+    } catch (e) {
+      Alert.alert("Publish", e?.message || "Unable to publish property. Please try again.");
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const resolveImageUri = (raw) => {
     if (!raw) return null;
@@ -93,7 +152,43 @@ export default function PropertyPreviewScreen({ route, navigation }) {
   const agreementDuration = String(property.agreementDurationMonths || "").trim();
 
   return (
-    <View style={styles.wrapper}>
+    <LinearGradient
+      colors={["#DCEBFF", "#E6DBFF", "#D8E6FF"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.wrapper}
+    >
+      <Modal
+        transparent
+        visible={publishSuccessVisible}
+        animationType="fade"
+        onRequestClose={() => setPublishSuccessVisible(false)}
+      >
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <Text style={styles.successTitle}>Your property Successfully Posted</Text>
+            <Text style={styles.successSub}>Your listing is now saved and visible in My Property.</Text>
+            <TouchableOpacity
+              style={styles.successBtn}
+              activeOpacity={0.9}
+              onPress={() => {
+                setPublishSuccessVisible(false);
+                if (navigation?.reset) {
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: "Main", params: { screen: "Property" } }],
+                  });
+                  return;
+                }
+                navigation?.navigate?.("Main", { screen: "Property" });
+              }}
+            >
+              <Text style={styles.successBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation?.goBack?.()}>
           <MaterialIcons name="arrow-back" size={22} color="#374151" />
@@ -260,17 +355,18 @@ export default function PropertyPreviewScreen({ route, navigation }) {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.publishBtn}
-          onPress={() => Alert.alert("Publish", "Go back and tap Publish Property to submit.")}
+          onPress={publishProperty}
+          disabled={publishing}
         >
           <MaterialIcons name="publish" size={18} color="#fff" />
-          <Text style={styles.publishText}>Publish Property</Text>
+          <Text style={styles.publishText}>{publishing ? "Publishing..." : "Publish Property"}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation?.goBack?.()}>
           <Text style={styles.draftText}>Save as Draft</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -300,26 +396,27 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: 420,
     alignSelf: "center",
-    backgroundColor: "#f6f7f8",
+    backgroundColor: "transparent",
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    backgroundColor: "#fff",
+    backgroundColor: "transparent",
     borderBottomWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "rgba(17, 24, 39, 0.10)",
   },
   headerTitle: {
     flex: 1,
     textAlign: "center",
     fontSize: 16,
     fontWeight: "800",
+    color: "#111418",
   },
 
   section: {
-    backgroundColor: "#fff",
+    backgroundColor: "transparent",
     marginBottom: 8,
     padding: 16,
   },
@@ -332,6 +429,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: "800",
+    color: "#111418",
   },
   editBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
   editText: { fontSize: 13, color: "#2563eb", fontWeight: "600" },
@@ -345,118 +443,101 @@ const styles = StyleSheet.create({
 
   badge: {
     alignSelf: "flex-start",
-    backgroundColor: "#2563eb20",
+    backgroundColor: "rgba(37, 99, 235, 0.12)",
     color: "#2563eb",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     fontSize: 11,
-    fontWeight: "700",
-    marginBottom: 6,
+    fontWeight: "800",
   },
   propertyTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 12,
-    color: "#111827",
+    marginTop: 10,
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#111418",
   },
 
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
   infoBox: {
     width: "48%",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
+    borderColor: "rgba(17, 24, 39, 0.12)",
+    borderRadius: 14,
     padding: 12,
-    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
-  infoLabel: { fontSize: 11, color: "#6b7280" },
-  infoValue: { fontSize: 13, fontWeight: "700", color: "#111827" },
+  infoLabel: { fontSize: 11, fontWeight: "800", color: "#6b7280" },
+  infoValue: { marginTop: 6, fontSize: 13, fontWeight: "900", color: "#111418" },
 
-  subLabel: { fontSize: 12, color: "#6b7280", marginTop: 6 },
-  description: { fontSize: 13, marginTop: 4, lineHeight: 18, color: "#111827" },
+  subLabel: { marginTop: 16, fontSize: 12, fontWeight: "800", color: "#111418" },
+  description: { marginTop: 8, fontSize: 13, lineHeight: 18, fontWeight: "600", color: "#374151" },
 
   priceBox: {
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "rgba(17, 24, 39, 0.12)",
     borderRadius: 14,
     padding: 14,
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
-  priceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  priceLabel: { fontSize: 13, color: "#6b7280" },
-  price: { fontSize: 18, fontWeight: "800", color: "#2563eb" },
+  priceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  priceLabel: { fontSize: 12, fontWeight: "800", color: "#6b7280" },
+  price: { fontSize: 18, fontWeight: "900", color: "#111418" },
 
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  rowLabel: { fontSize: 13, color: "#6b7280" },
-  rowValue: { fontSize: 13, fontWeight: "600", color: "#111827" },
+  row: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  rowLabel: { fontSize: 12, fontWeight: "700", color: "#6b7280" },
+  rowValue: { fontSize: 12, fontWeight: "800", color: "#111418" },
 
-  locationRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 10,
-  },
-  locationText: { fontSize: 13, fontWeight: "600", color: "#111827" },
-  locationSub: { fontSize: 12, color: "#6b7280" },
-
+  locationRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  locationText: { fontSize: 13, fontWeight: "800", color: "#111418" },
+  locationSub: { marginTop: 2, fontSize: 12, fontWeight: "700", color: "#6b7280" },
   mapPlaceholder: {
-    height: 140,
-    backgroundColor: "#9ca3af",
+    marginTop: 12,
+    height: 120,
     borderRadius: 14,
+    backgroundColor: "rgba(17, 24, 39, 0.30)",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  amenitiesWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
+  amenitiesWrap: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   amenity: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    borderColor: "rgba(17, 24, 39, 0.12)",
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  amenityText: { fontSize: 12, color: "#111827" },
+  amenityText: { fontSize: 12, fontWeight: "800", color: "#111418" },
 
   contactBox: {
     flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(37, 99, 235, 0.28)",
+    backgroundColor: "rgba(37, 99, 235, 0.10)",
+    borderRadius: 16,
     padding: 14,
-    backgroundColor: "#2563eb10",
-    borderRadius: 14,
   },
-  contactTitle: { fontWeight: "700", color: "#111827" },
-  contactSub: { fontSize: 11, color: "#6b7280", marginTop: 2 },
-
-  contactActions: { flexDirection: "row", gap: 8, marginTop: 6 },
+  contactTitle: { fontSize: 14, fontWeight: "900", color: "#111418" },
+  contactSub: { marginTop: 2, fontSize: 12, fontWeight: "700", color: "#6b7280" },
+  contactActions: { marginTop: 10, flexDirection: "row", gap: 10 },
   tag: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.25)",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: "#fff",
+    borderColor: "rgba(17, 24, 39, 0.12)",
   },
-  tagText: { fontSize: 11, color: "#111827" },
+  tagText: { fontSize: 12, fontWeight: "800", color: "#111418" },
 
   footer: {
     position: "absolute",
@@ -464,28 +545,45 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: 16,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.10)",
     borderTopWidth: 1,
-    borderColor: "#e5e7eb",
-    alignItems: "center",
-    gap: 10,
+    borderColor: "rgba(17, 24, 39, 0.10)",
   },
   publishBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 10,
     backgroundColor: "#2563eb",
     width: "100%",
     paddingVertical: 14,
     borderRadius: 14,
   },
-  publishText: {
-    color: "#fff",
-    fontWeight: "800",
+  publishText: { color: "#fff", fontWeight: "900" },
+  draftText: { textAlign: "center", marginTop: 14, fontWeight: "700", color: "#374151" },
+
+  successOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
   },
-  draftText: {
-    fontSize: 13,
-    color: "#6b7280",
+  successCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 18,
   },
+  successTitle: { fontSize: 16, fontWeight: "900", color: "#111418" },
+  successSub: { marginTop: 6, fontSize: 13, fontWeight: "600", color: "#6b7280" },
+  successBtn: {
+    marginTop: 14,
+    backgroundColor: "#2563eb",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  successBtnText: { color: "#fff", fontWeight: "900" },
 });

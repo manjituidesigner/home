@@ -325,7 +325,11 @@ export default function DashboardScreen({ navigation }) {
       subtitle={roleLabel(role) || undefined}
       showSearchRow
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

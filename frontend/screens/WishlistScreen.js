@@ -47,7 +47,11 @@ export default function WishlistScreen({ navigation }) {
     <ScreenLayout
       title="Wishlist"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

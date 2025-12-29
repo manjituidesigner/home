@@ -1261,11 +1261,7 @@ export default function PropertyDetailsScreen({ route, navigation }) {
                 </TouchableOpacity>
               </View>
             )
-          ) : (
-            <TouchableOpacity style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>Manage Property</Text>
-            </TouchableOpacity>
-          )}
+          ) : null}
         </View>
       </View>
     </SafeAreaView>

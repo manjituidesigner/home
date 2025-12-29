@@ -8,7 +8,11 @@ export default function ChatScreen({ navigation }) {
     <ScreenLayout
       title="Chat"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

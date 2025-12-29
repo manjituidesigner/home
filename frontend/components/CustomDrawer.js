@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '../theme';
@@ -10,6 +10,56 @@ const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const PROFILE_STORAGE_KEY = 'PROFILE_SCREEN_DATA';
 const WISHLIST_STORAGE_KEY = 'WISHLIST_PROPERTIES';
 const OFFER_SUBMISSIONS_KEY = 'OFFER_SUBMISSIONS_V1';
+const LOGIN_STORAGE_KEY = 'LOGIN_REMEMBER_CREDENTIALS';
+
+function clearWebLocalStorageAggressive() {
+  try {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const storage = window?.localStorage;
+    if (!storage) return;
+
+    const targets = [
+      AUTH_TOKEN_STORAGE_KEY,
+      USER_PROFILE_STORAGE_KEY,
+      PROFILE_STORAGE_KEY,
+      WISHLIST_STORAGE_KEY,
+      OFFER_SUBMISSIONS_KEY,
+      LOGIN_STORAGE_KEY,
+      'APP_STORAGE_SCHEMA_VERSION',
+    ].map((k) => String(k));
+
+    const toRemove = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const k = storage.key(i);
+      if (!k) continue;
+
+      const keyStr = String(k);
+      const looksExpo = keyStr.toLowerCase().includes('expo') || keyStr.toLowerCase().includes('exponent');
+      const matchesTarget = targets.some((t) => keyStr === t || keyStr.includes(t) || keyStr.endsWith(`:${t}`) || keyStr.endsWith(`/${t}`));
+
+      if (looksExpo || matchesTarget) toRemove.push(keyStr);
+    }
+
+    toRemove.forEach((k) => {
+      try {
+        storage.removeItem(k);
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+
+async function clearAllAppAsyncStorage() {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    if (Array.isArray(keys) && keys.length) {
+      await AsyncStorage.multiRemove(keys);
+      return;
+    }
+  } catch (e) {}
+  try {
+    await AsyncStorage.clear();
+  } catch (e) {}
+}
 
 function normalizeRole(role) {
   const r = String(role || '').trim().toLowerCase();
@@ -136,26 +186,36 @@ export default function CustomDrawer(props) {
     const targetRoute = state.routes.find((r) => r.name === itemKey);
     if (targetRoute) {
       navigation.navigate(itemKey);
+      if (navigation?.closeDrawer) {
+        navigation.closeDrawer();
+      }
     }
   };
 
-  const handleLogout = () => {
-    navigation.closeDrawer();
+  const handleLogout = async () => {
+    try {
+      if (navigation?.closeDrawer) navigation.closeDrawer();
+    } catch (e) {}
+
     clearSession();
-    AsyncStorage.multiRemove([
-      AUTH_TOKEN_STORAGE_KEY,
-      USER_PROFILE_STORAGE_KEY,
-      PROFILE_STORAGE_KEY,
-      WISHLIST_STORAGE_KEY,
-      OFFER_SUBMISSIONS_KEY,
-    ]).catch(() => {});
-    const parent = navigation.getParent();
-    if (parent) {
-      parent.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      });
-    }
+    clearWebLocalStorageAggressive();
+    await clearAllAppAsyncStorage();
+    clearWebLocalStorageAggressive();
+
+    try {
+      const parent = navigation.getParent();
+      if (parent) {
+        parent.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      } else {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+      }
+    } catch (e) {}
   };
 
   return (

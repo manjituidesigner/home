@@ -8,7 +8,11 @@ export default function DocsScreen({ navigation }) {
     <ScreenLayout
       title="Docs"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

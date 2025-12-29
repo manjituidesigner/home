@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   modal: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 412,
     borderRadius: 40,
     overflow: 'hidden',
     backgroundColor: '#F1F5F9',

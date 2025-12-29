@@ -301,7 +301,11 @@ export default function PaymentsScreen({ navigation, route }) {
     <ScreenLayout
       title="Payments"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

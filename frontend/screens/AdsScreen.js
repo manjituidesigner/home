@@ -1,11 +1,18 @@
-import React, { useMemo, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CommonActions } from '@react-navigation/native';
+import { Alert, Image, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import MapPicker from '../components/MapPicker';
+import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
 import { API_BASE_URL } from '../apiBaseUrl';
 
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
+
+const ADS_FORM_MAX_WIDTH = Platform.OS === 'web' ? 960 : 520;
 
 function Chip({ label, selected, onPress }) {
   return (
@@ -16,6 +23,36 @@ function Chip({ label, selected, onPress }) {
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+function AddPropertyTopBar({ title, step, totalSteps, onBack, onCancel }) {
+  const safeTotal = typeof totalSteps === 'number' && totalSteps > 0 ? totalSteps : 1;
+  const safeStep = typeof step === 'number' && step > 0 ? Math.min(step, safeTotal) : 1;
+  const progress = Math.round((safeStep / safeTotal) * 100);
+
+  return (
+    <View style={styles.apTopWrap}>
+      <View style={styles.apHeaderRow}>
+        <TouchableOpacity style={styles.apHeaderLeft} activeOpacity={0.9} onPress={onBack}>
+          <MaterialIcons name="arrow-back" size={22} color="#111418" />
+        </TouchableOpacity>
+        <Text style={styles.apHeaderTitle}>{title}</Text>
+        <TouchableOpacity style={styles.apHeaderRight} activeOpacity={0.9} onPress={onCancel}>
+          <Text style={styles.apHeaderRightText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.apProgressWrap}>
+        <View style={styles.apProgressTop}>
+          <Text style={styles.apProgressStep}>{`Step ${safeStep} of ${safeTotal}`}</Text>
+          <Text style={styles.apProgressPercent}>{`${progress}% completed`}</Text>
+        </View>
+        <View style={styles.apProgressBar}>
+          <View style={[styles.apProgressFill, { width: `${progress}%` }]} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -188,11 +225,7 @@ export default function AdsScreen({ navigation }) {
   const [floorNumber, setFloorNumber] = useState('');
 
   const [step, setStep] = useState(1);
-  const [photos, setPhotos] = useState([
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuCyTRHYdLkweHN2HGzXoByF1Hbgu42CjVvyS5vGitJqvzB8zepy8VuDn7JixneK0KEvTnz6nDhXe0rv27PbwO9AyYXYdiEwc5EWQIKj3NOUDEk0LadxhZ5SlJmqYKcF7HzUYqFmK5aLUNH_HolpkzMbJ5ry-i_1TQLZoZ-NI_ment9YX-EDMprXU2nQ8CwHU9qFLfkTABTy0nqLRmTCyuSxlg0JKzfPr3_RLxRB04zM5m7iieDGnPoYs0khRWR-pmi5wLciFukmAe8',
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuAW-u-32BQMz4iXVvq97eJfivLpS45fCbZnTeIi8iyRvOs_eRveBIXzb7HjFMQWA1pTb47m7WVL6DhSNWW2MxpsTt26D-dTpYqhdBSXvPq6MmPzQsmvM8W8hBGqyMRFkqSmVMD5FxqGmmF62Jqv5KpNb8xszv3T9hf2d69-_IGlh7Qk7fSzzkqneRNuHWbPpN4VosntYlRC3UPsan5a5OU3pRvYgcgyldHy_l0B-D6WN_gv412LtwzewliEGhmQyZFoUtS8YRzPq4o',
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuD5dT_q3ln4U7Qtf46PIxl6DTE-nmDL-BqZJrtpI3CEYzfkgQRtTBfezN-XwJF-RIN6wtLD_SfLAhRr0z8UJvHBAbcXH3BmLn7b9QNMcRHKK3ijmT4vnn-E-F0Ml07HcMTSUgyMWsSKgKAKA2DCMqjFdIQfWjad6hpVeME3jVsPLNuN_kiH1Vv9U74fACTlsMovVcu2vddyr9iN4BZiVtOIfM8kk6Nk_-MGJWFRxHnQRi4aIRLGm_R948u3QkNPVRzNFVGURs3Ovmw',
-  ]);
+  const [photos, setPhotos] = useState([]);
 
   const [savedAddress, setSavedAddress] = useState('');
   const [houseNo, setHouseNo] = useState('');
@@ -200,6 +233,10 @@ export default function AdsScreen({ navigation }) {
   const [buildingName, setBuildingName] = useState('');
   const [streetName, setStreetName] = useState('');
   const [locality, setLocality] = useState('');
+
+  const [mapRegion, setMapRegion] = useState(null);
+  const [mapPin, setMapPin] = useState(null);
+  const [mapLocation, setMapLocation] = useState('');
 
   const [carpetArea, setCarpetArea] = useState('');
   const [builtUpArea, setBuiltUpArea] = useState('');
@@ -236,7 +273,10 @@ export default function AdsScreen({ navigation }) {
     ],
     [],
   );
+  const [amenityOptions, setAmenityOptions] = useState(() => amenityItems);
   const [selectedAmenities, setSelectedAmenities] = useState(['fan', 'wifi', 'parking']);
+  const [amenityInputOpen, setAmenityInputOpen] = useState(false);
+  const [amenityInputText, setAmenityInputText] = useState('');
 
   const [smokingAllowed, setSmokingAllowed] = useState(false);
   const [drinkingAllowed, setDrinkingAllowed] = useState(true);
@@ -275,6 +315,11 @@ export default function AdsScreen({ navigation }) {
 
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
 
+  const [publishSuccessVisible, setPublishSuccessVisible] = useState(false);
+
+  const [draftId, setDraftId] = useState(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+
   const [agreementType, setAgreementType] = useState('owner');
   const [agreementDuration, setAgreementDuration] = useState('');
   const [propertyStatus, setPropertyStatus] = useState('available');
@@ -284,22 +329,297 @@ export default function AdsScreen({ navigation }) {
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
+  const updateMapFromCoords = (lat, lng) => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    setMapPin({ latitude: lat, longitude: lng });
+    setMapRegion((prev) => {
+      const latitudeDelta = prev?.latitudeDelta ?? 0.01;
+      const longitudeDelta = prev?.longitudeDelta ?? 0.01;
+      return { latitude: lat, longitude: lng, latitudeDelta, longitudeDelta };
+    });
+    setMapLocation(`${lat},${lng}`);
+  };
+
+  const initMapLocation = async () => {
+    if (mapRegion) return;
+    try {
+      const builtAddress = [houseNo, buildingName, streetName, locality]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean)
+        .join(', ');
+
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        // fallback region (India-ish) so map still renders
+        const fallback = { latitude: 28.6139, longitude: 77.209, latitudeDelta: 0.1, longitudeDelta: 0.1 };
+        setMapRegion(fallback);
+        setMapPin({ latitude: fallback.latitude, longitude: fallback.longitude });
+        setMapLocation(`${fallback.latitude},${fallback.longitude}`);
+        return;
+      }
+
+      if (builtAddress) {
+        try {
+          const geocoded = await Location.geocodeAsync(builtAddress);
+          const first = geocoded && geocoded[0];
+          if (first && Number.isFinite(first.latitude) && Number.isFinite(first.longitude)) {
+            const region = { latitude: first.latitude, longitude: first.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+            setMapRegion(region);
+            setMapPin({ latitude: first.latitude, longitude: first.longitude });
+            setMapLocation(`${first.latitude},${first.longitude}`);
+            return;
+          }
+        } catch (e) {
+          // ignore geocode errors
+        }
+      }
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = pos?.coords?.latitude;
+      const lng = pos?.coords?.longitude;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const region = { latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+        setMapRegion(region);
+        setMapPin({ latitude: lat, longitude: lng });
+        setMapLocation(`${lat},${lng}`);
+      }
+    } catch (e) {
+      // fallback region
+      const fallback = { latitude: 28.6139, longitude: 77.209, latitudeDelta: 0.1, longitudeDelta: 0.1 };
+      setMapRegion(fallback);
+      setMapPin({ latitude: fallback.latitude, longitude: fallback.longitude });
+      setMapLocation(`${fallback.latitude},${fallback.longitude}`);
+    }
+  };
+
+  useEffect(() => {
+    if (step !== 3) return;
+    initMapLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  const uploadPropertyImageDataUrl = async (dataUrl) => {
+    const resp = await fetch(`${API_BASE_URL}/properties/upload-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl }),
+    });
+    if (!resp.ok) throw new Error('UPLOAD_FAILED');
+    const body = await resp.json().catch(() => ({}));
+    if (!body?.url) throw new Error('UPLOAD_NO_URL');
+    return body.url;
+  };
+
+  const handleAddPhotos = async () => {
+    try {
+      const current = Array.isArray(photos) ? photos : [];
+      if (current.length >= 5) {
+        Alert.alert('Photos', 'You can upload up to 5 images.');
+        return;
+      }
+
+      const remaining = 5 - current.length;
+      const maxBytes = 5 * 1024 * 1024;
+
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+
+        input.onchange = async () => {
+          try {
+            const files = Array.from(input.files || []).slice(0, remaining);
+            if (!files.length) return;
+
+            const nextUrls = [];
+            for (const file of files) {
+              if (file.size > maxBytes) {
+                Alert.alert('Image too large', 'Each image must be under 5MB.');
+                continue;
+              }
+              const reader = new FileReader();
+              const dataUrl = await new Promise((resolve, reject) => {
+                reader.onerror = reject;
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+              });
+              if (typeof dataUrl !== 'string') continue;
+              const url = await uploadPropertyImageDataUrl(dataUrl);
+              nextUrls.push(url);
+            }
+
+            if (nextUrls.length) {
+              setPhotos((prev) => [...(Array.isArray(prev) ? prev : []), ...nextUrls].slice(0, 5));
+            }
+          } catch (e) {
+            Alert.alert('Photos', 'Unable to upload image(s). Please try again.');
+          }
+        };
+
+        input.click();
+        return;
+      }
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow access to your photos to upload property images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || !result.assets.length) return;
+
+      const nextUrls = [];
+      for (const asset of result.assets.slice(0, remaining)) {
+        const base64 = asset.base64 || '';
+        if (!base64) {
+          Alert.alert('Photos', 'Unable to read selected image. Please try another file.');
+          continue;
+        }
+        const approxBytes = (base64.length * 3) / 4;
+        if (approxBytes > maxBytes) {
+          Alert.alert('Image too large', 'Each image must be under 5MB.');
+          continue;
+        }
+        const dataUrl = `data:image/jpeg;base64,${base64}`;
+        const url = await uploadPropertyImageDataUrl(dataUrl);
+        nextUrls.push(url);
+      }
+
+      if (nextUrls.length) {
+        setPhotos((prev) => [...(Array.isArray(prev) ? prev : []), ...nextUrls].slice(0, 5));
+      }
+    } catch (e) {
+      Alert.alert('Photos', 'Unable to pick/upload image(s). Please try again.');
+    }
+  };
+
+  const handleRemovePhoto = (idx) => {
+    setPhotos((prev) => (Array.isArray(prev) ? prev.filter((_, i) => i !== idx) : []));
+  };
+
+  const goNextFromMedia = () => {
+    const count = Array.isArray(photos) ? photos.length : 0;
+    if (count < 3) {
+      Alert.alert('Photos', 'Please add at least 3 images for your property.');
+      return;
+    }
+    goToStep(3);
+  };
+
+  const validateForStep = (targetStep) => {
+    const nextStep = typeof targetStep === 'number' ? targetStep : step;
+    const errors = [];
+
+    const name = String(propertyName || '').trim();
+    const rent = String(rentAmount || '').trim();
+    const carpet = String(carpetArea || '').trim();
+    const photosCount = Array.isArray(photos) ? photos.length : 0;
+
+    if (nextStep >= 2 && !name) errors.push('Property name is required.');
+    if (nextStep >= 3 && photosCount < 3) errors.push('Please add at least 3 property photos.');
+    if (nextStep >= 5 && !carpet) errors.push('Carpet area is required.');
+    if (nextStep >= 6 && !rent) errors.push('Monthly rent amount is required.');
+
+    if (errors.length) {
+      Alert.alert('Validation', errors.join('\n'));
+      return false;
+    }
+    return true;
+  };
+
+  const goToStep = (targetStep) => {
+    if (!validateForStep(targetStep)) return;
+    setStep(targetStep);
+  };
+
+  const openPreviewValidated = () => {
+    if (!validateForStep(12)) return;
+    if (!navigation || typeof navigation.navigate !== 'function') return;
+    navigation.navigate('PropertyPreview', { property: buildDraftPayload() });
+  };
+
+  const requestCancel = () => {
+    setCancelModalVisible(true);
+  };
+
+  const cancelWithoutSaving = () => {
+    setCancelModalVisible(false);
+    navigateToPropertyList();
+  };
+
+  const cancelAndSaveDraft = async () => {
+    try {
+      await saveDraft();
+    } catch (e) {}
+    setCancelModalVisible(false);
+    navigateToPropertyList();
+  };
+
   const buildDraftPayload = () => {
     const mappedStatus = propertyStatus === 'available' ? 'available' : 'occupied';
+
+    const normalizeBhk = (val) => {
+      const s = String(val || '').trim();
+      if (!s) return '';
+      const m = s.match(/(\d+)/);
+      if (m && m[1]) return `${m[1]}BHK`;
+      if (/5\+/.test(s)) return '5BHK';
+      return s.replace(/\s+/g, '').toUpperCase();
+    };
+
+    const normalizeFurnishing = (val) => {
+      const s = String(val || '').toLowerCase();
+      if (s.includes('semi')) return 'semi';
+      if (s.includes('full')) return 'full';
+      if (s.includes('unfurnished')) return 'unfurnished';
+      if (s.includes('un')) return 'unfurnished';
+      return 'semi';
+    };
+
+    const boolToPolicy = (b) => (b ? 'allowed' : 'not_allowed');
+    const normalizeLateNightPolicy = (val) => {
+      const s = String(val || '').toLowerCase();
+      if (!s) return 'not_allowed';
+      if (s.includes('no restriction') || s.includes('allowed')) return 'allowed';
+      if (s.includes('not') && s.includes('allow')) return 'not_allowed';
+      if (s.includes('conditional')) return 'conditional';
+      return 'allowed';
+    };
+
+    const normalizeVisitorsAllowed = (val) => {
+      const s = String(val || '').toLowerCase().trim();
+      if (s === 'yes' || s === 'no') return s;
+      if (s.includes('yes') || s.includes('allow')) return 'yes';
+      return 'no';
+    };
+
+    const builtAddress = [houseNo, buildingName, streetName, locality]
+      .map((x) => String(x || '').trim())
+      .filter(Boolean)
+      .join(', ');
 
     return {
       propertyName,
       category,
       listingType,
-      bhk: configuration,
-      furnishing,
+      bhk: normalizeBhk(configuration),
+      furnishing: normalizeFurnishing(furnishing),
       mode: propertyMode,
-      rentRoomScope: rentScope,
+      rentRoomScope: propertyMode,
       totalRooms,
       floor: floorNumber,
-      address,
-      mapLocation: mapUrl,
-      photos: mediaPhotos,
+      address: builtAddress,
+      mapLocation,
+      photos,
       amenities: selectedAmenities,
 
       rentAmount,
@@ -319,10 +639,10 @@ export default function AdsScreen({ navigation }) {
       lockInEnabled,
       lockInMonths,
 
-      drinksPolicy: drinkingAllowed,
-      smokingPolicy: smokingAllowed,
-      lateNightPolicy: lateNightEntry,
-      visitorsAllowed: visitorPolicy,
+      drinksPolicy: boolToPolicy(!!drinkingAllowed),
+      smokingPolicy: boolToPolicy(!!smokingAllowed),
+      lateNightPolicy: normalizeLateNightPolicy(lateNightEntry),
+      visitorsAllowed: normalizeVisitorsAllowed(visitorPolicy),
       parkingType: parkingRule,
       noticePeriodDays: noticeDays,
 
@@ -340,29 +660,45 @@ export default function AdsScreen({ navigation }) {
       contactDays,
       visitType,
 
+      agreementDurationMonths: agreementDuration,
       agreementType,
-      agreementDuration,
       status: mappedStatus,
     };
   };
 
   const navigateToPropertyList = () => {
-    if (navigation && typeof navigation.navigate === 'function') {
-      try {
-        navigation.navigate('Property');
+    try {
+      if (navigation?.dispatch) {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'Main',
+                state: {
+                  index: 0,
+                  routes: [{ name: 'Property' }],
+                },
+              },
+            ],
+          })
+        );
         return;
-      } catch (e) {
-        // ignore
       }
+    } catch (e) {}
+
+    if (navigation && typeof navigation.navigate === 'function') {
+      navigation.navigate('Main', { screen: 'Property' });
+      return;
     }
-    if (navigation && typeof navigation.goBack === 'function') {
-      navigation.goBack();
-    }
+
+    if (navigation && typeof navigation.goBack === 'function') navigation.goBack();
   };
 
-  const saveDraft = async () => {
-    if (draftBusy) return;
-    setDraftBusy(true);
+  const saveDraft = async (options = {}) => {
+    const skipBusy = !!options?.skipBusy;
+    if (draftBusy && !skipBusy) return;
+    if (!skipBusy) setDraftBusy(true);
     try {
       const authHeaders = await getAuthHeaders();
       const payload = buildDraftPayload();
@@ -384,11 +720,12 @@ export default function AdsScreen({ navigation }) {
       if (!draftId && json?._id) setDraftId(json._id);
       return json;
     } finally {
-      setDraftBusy(false);
+      if (!skipBusy) setDraftBusy(false);
     }
   };
 
   const publishFromDraft = async () => {
+    if (!validateForStep(12)) return;
     if (draftBusy) return;
     setDraftBusy(true);
     try {
@@ -396,9 +733,9 @@ export default function AdsScreen({ navigation }) {
       let effectiveDraftId = draftId;
 
       if (!effectiveDraftId) {
-        const created = await saveDraft();
+        const created = await saveDraft({ skipBusy: true });
         effectiveDraftId = created?._id;
-        if (!effectiveDraftId) throw new Error('Draft not created');
+        if (!effectiveDraftId) throw new Error('Unable to create draft. Please try again.');
       }
 
       const resp = await fetch(`${API_BASE_URL}/property-drafts/${effectiveDraftId}/publish`, {
@@ -406,58 +743,108 @@ export default function AdsScreen({ navigation }) {
         headers: { ...authHeaders },
       });
       if (!resp.ok) {
-        throw new Error('Failed to publish property');
+        let msg = 'Failed to publish property';
+        try {
+          const body = await resp.json();
+          if (body?.message) msg = body.message;
+          if (body?.error) msg = `${msg}: ${body.error}`;
+        } catch (e) {}
+        throw new Error(msg);
       }
 
       setDraftId(null);
-      navigateToPropertyList();
+      setPublishSuccessVisible(true);
+    } catch (e) {
+      Alert.alert('Publish', e?.message || 'Unable to publish property. Please try again.');
     } finally {
       setDraftBusy(false);
     }
   };
 
+  const openPreview = () => {
+    if (!navigation || typeof navigation.navigate !== 'function') return;
+    navigation.navigate('PropertyPreview', { property: buildDraftPayload() });
+  };
+
   return (
     <ScreenLayout showHeader={false} contentStyle={styles.layoutContent}>
-      <View style={styles.root}>
+      <LinearGradient
+        colors={['#DCEBFF', '#E6DBFF', '#D8E6FF']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.root}
+      >
+        <Modal
+          transparent
+          visible={cancelModalVisible}
+          animationType="fade"
+          onRequestClose={() => setCancelModalVisible(false)}
+        >
+          <View style={styles.cancelOverlay}>
+            <View style={styles.cancelCard}>
+              <Text style={styles.cancelTitle}>Cancel listing?</Text>
+              <Text style={styles.cancelSub}>Do you want to save this as a draft before exiting?</Text>
+              <View style={styles.cancelBtns}>
+                <TouchableOpacity style={styles.cancelBtnGhost} activeOpacity={0.9} onPress={cancelWithoutSaving}>
+                  <Text style={styles.cancelBtnGhostText}>No</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelBtnPrimary} activeOpacity={0.9} onPress={cancelAndSaveDraft}>
+                  <Text style={styles.cancelBtnPrimaryText}>Yes, Save Draft</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          transparent
+          visible={publishSuccessVisible}
+          animationType="fade"
+          onRequestClose={() => setPublishSuccessVisible(false)}
+        >
+          <View style={styles.cancelOverlay}>
+            <View style={styles.cancelCard}>
+              <Text style={styles.cancelTitle}>Your property Successfully Posted</Text>
+              <Text style={styles.cancelSub}>Your listing is now saved and visible in My Property.</Text>
+              <View style={styles.cancelBtns}>
+                <TouchableOpacity
+                  style={styles.cancelBtnPrimary}
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    setPublishSuccessVisible(false);
+                    navigateToPropertyList();
+                  }}
+                >
+                  <Text style={styles.cancelBtnPrimaryText}>OK</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {step === 1 ? (
           <>
-            <View style={styles.header}>
-              <TouchableOpacity
-                style={styles.headerIconBtn}
-                onPress={() => {
-                  if (navigation && typeof navigation.goBack === 'function' && navigation.canGoBack?.()) {
-                    navigation.goBack();
-                    return;
-                  }
-                  if (navigation && typeof navigation.openDrawer === 'function') {
-                    navigation.openDrawer();
-                  }
-                }}
-              >
-                <MaterialIcons name="arrow-back" size={22} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Add Property</Text>
-              <TouchableOpacity style={styles.headerHelpBtn} onPress={() => {}}>
-                <Text style={styles.headerHelpText}>Help</Text>
-              </TouchableOpacity>
-            </View>
+            <AddPropertyTopBar
+              title="Add Property"
+              step={step}
+              totalSteps={12}
+              onBack={() => {
+                if (navigation && typeof navigation.goBack === 'function' && navigation.canGoBack?.()) {
+                  navigation.goBack();
+                  return;
+                }
+                if (navigation && typeof navigation.openDrawer === 'function') {
+                  navigation.openDrawer();
+                }
+              }}
+              onCancel={requestCancel}
+            />
 
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.progressWrap}>
-                <View style={styles.progressTop}>
-                  <Text style={styles.progressStep}>Step 1 of 12</Text>
-                  <Text style={styles.progressPercent}>8% completed</Text>
-                </View>
-                <View style={styles.progressBar}>
-                  <View style={styles.progressFill} />
-                </View>
-                <Text style={styles.progressHint}>Basic Details</Text>
-              </View>
-
               <View style={styles.headline}>
                 <Text style={styles.headlineTitle}>Property Basic Information</Text>
                 <Text style={styles.headlineSub}>Tell us about your property to get started.</Text>
@@ -592,43 +979,18 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.footer}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={navigateToPropertyList}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(2)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(2)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 2 ? (
           <>
-            <View style={styles.mediaHeader}>
-              <TouchableOpacity style={styles.mediaCloseBtn} onPress={() => setStep(1)} activeOpacity={0.8}>
-                <MaterialIcons name="close" size={26} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.mediaHeaderTitle}>Media</Text>
-              <View style={styles.mediaHeaderRight}>
-                <TouchableOpacity style={styles.mediaHelpIconBtn} activeOpacity={0.8} onPress={() => {}}>
-                  <MaterialIcons name="help-outline" size={24} color="#111418" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.mediaProgressBarWrap}>
-              <View style={styles.mediaProgressTop}>
-                <Text style={styles.mediaProgressStep}>Step 2 of 12</Text>
-                <Text style={styles.mediaProgressPercent}>16% Completed</Text>
-              </View>
-              <View style={styles.mediaProgressTrack}>
-                <View style={styles.mediaProgressFill} />
-              </View>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(1)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -654,7 +1016,7 @@ export default function AdsScreen({ navigation }) {
                   </View>
 
                   <View style={styles.mediaGrid}>
-                    {photos.slice(0, 3).map((uri, idx) => (
+                    {photos.map((uri, idx) => (
                       <View key={`${uri}-${idx}`} style={styles.mediaPhotoTile}>
                         <Image source={{ uri }} style={styles.mediaPhotoImg} />
                         <View style={styles.mediaPhotoOverlay} />
@@ -666,19 +1028,21 @@ export default function AdsScreen({ navigation }) {
                         <TouchableOpacity
                           style={styles.mediaRemoveBtn}
                           activeOpacity={0.9}
-                          onPress={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                          onPress={() => handleRemovePhoto(idx)}
                         >
                           <MaterialIcons name="close" size={16} color="#ef4444" />
                         </TouchableOpacity>
                       </View>
                     ))}
 
-                    <TouchableOpacity style={styles.mediaAddSlot} activeOpacity={0.9} onPress={() => {}}>
+                    {photos.length < 5 ? (
+                      <TouchableOpacity style={styles.mediaAddSlot} activeOpacity={0.9} onPress={handleAddPhotos}>
                       <View style={styles.mediaAddIconCircle}>
                         <MaterialIcons name="add-a-photo" size={22} color="#2563eb" />
                       </View>
                       <Text style={styles.mediaAddLabel}>Add Photo</Text>
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
 
@@ -711,29 +1075,18 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.mediaFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(1)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(3)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={goNextFromMedia}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 3 ? (
           <>
-            <View style={styles.addrHeader}>
-              <TouchableOpacity style={styles.addrHeaderBack} activeOpacity={0.8} onPress={() => setStep(2)}>
-                <MaterialIcons name="arrow-back" size={24} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.addrHeaderTitle}>Add Property</Text>
-              <View style={styles.addrHeaderRight} />
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(2)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -741,18 +1094,6 @@ export default function AdsScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.addrBody}>
-                <View style={styles.addrProgressWrap}>
-                  <View style={styles.addrProgressTop}>
-                    <Text style={styles.addrProgressStep}>Step 3 of 12</Text>
-                    <View style={styles.addrProgressPill}>
-                      <Text style={styles.addrProgressPillText}>25% Completed</Text>
-                    </View>
-                  </View>
-                  <View style={styles.addrProgressBar}>
-                    <View style={styles.addrProgressFill} />
-                  </View>
-                </View>
-
                 <View style={styles.addrTitleWrap}>
                   <Text style={styles.addrTitle}>Address & Location</Text>
                   <Text style={styles.addrSub}>Where is your property located?</Text>
@@ -846,17 +1187,19 @@ export default function AdsScreen({ navigation }) {
                   </View>
 
                   <View style={styles.addrMapBox}>
-                    <Image
-                      source={{
-                        uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuADDW4_J8X5Go-WTVlxI7QECeux4wEiFEpPQd8oc70VPLKms5PcSMd-RDVCcf7BpcLU3z9yhAv-71WB7lhEcRCkbc8HwymWtbq5CUJQyMgLbDTSjPolzh-PAGs1rbvYB4tHixHI9obZoXj1BEJFlvdFdnNG5EOAJC43oKfIQrb1XgDQAv70XeqzUh0Gz7ZUYCkvE3T6zbp6pv0SESUUFaTp_knF1NXS3613GBoSlZz754TmiqjHSDyK-A502zjyPgntaI8o-QUFmME',
-                      }}
-                      style={styles.addrMapImg}
-                    />
-                    <View style={styles.addrMapGradient} />
-                    <View style={styles.addrMapPin}>
-                      <MaterialIcons name="location-on" size={38} color="#2563eb" />
-                      <View style={styles.addrPinShadow} />
-                    </View>
+                    {mapRegion ? (
+                      <MapPicker
+                        style={styles.addrMapImg}
+                        region={mapRegion}
+                        pin={mapPin}
+                        onPick={(lat, lng) => updateMapFromCoords(lat, lng)}
+                        onRegionChange={(r) => setMapRegion(r)}
+                      />
+                    ) : (
+                      <View style={[styles.addrMapImg, { alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ color: '#6b7280', fontWeight: '600' }}>Loading map…</Text>
+                      </View>
+                    )}
                     <View style={styles.addrMapHelper}>
                       <Text style={styles.addrMapHelperText}>Drag map to pin exact entrance</Text>
                     </View>
@@ -867,41 +1210,18 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.addrFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(2)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(4)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(4)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 4 ? (
           <>
-            <View style={styles.areaHeader}>
-              <TouchableOpacity style={styles.areaHeaderBtn} activeOpacity={0.8} onPress={() => setStep(3)}>
-                <MaterialIcons name="arrow-back" size={24} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.areaHeaderTitle}>Area & Size Details</Text>
-              <TouchableOpacity style={styles.areaHeaderBtn} activeOpacity={0.8} onPress={() => {}}>
-                <MaterialIcons name="help-outline" size={24} color="#111418" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.areaProgressWrap}>
-              <View style={styles.areaProgressTop}>
-                <Text style={styles.areaProgressStep}>Step 4 of 12</Text>
-                <Text style={styles.areaProgressPercent}>33% Completed</Text>
-              </View>
-              <View style={styles.areaProgressTrack}>
-                <View style={styles.areaProgressFill} />
-              </View>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(3)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -983,44 +1303,24 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.areaFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(3)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(5)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(5)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 5 ? (
           <>
-            <View style={styles.rentHeader}>
-              <TouchableOpacity style={styles.rentHeaderBtn} activeOpacity={0.9} onPress={() => setStep(4)}>
-                <MaterialIcons name="arrow-back-ios-new" size={18} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.rentHeaderTitle}>Rent & Charges</Text>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(4)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.rentScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.rentProgressWrap}>
-                <View style={styles.rentProgressTop}>
-                  <Text style={styles.rentProgressStep}>Step 5 of 12</Text>
-                  <Text style={styles.rentProgressPct}>42%</Text>
-                </View>
-                <View style={styles.rentProgressTrack}>
-                  <View style={styles.rentProgressFill} />
-                </View>
-              </View>
-
               <View style={styles.rentSection}>
                 <Text style={styles.rentSectionTitle}>Core Financials</Text>
                 <View style={styles.rentCard}>
@@ -1200,40 +1500,18 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.rentFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(4)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(6)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(6)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 6 ? (
           <>
-            <View style={styles.availHeader}>
-              <View style={styles.availHeaderTop}>
-                <TouchableOpacity style={styles.availHeaderBtn} activeOpacity={0.9} onPress={() => setStep(5)}>
-                  <MaterialIcons name="arrow-back-ios-new" size={20} color="#0f172a" />
-                </TouchableOpacity>
-                <Text style={styles.availHeaderTitle}>Availability & Duration</Text>
-                <View style={styles.availHeaderSpacer} />
-              </View>
-              <View style={styles.availProgressWrap}>
-                <View style={styles.availProgressTop}>
-                  <Text style={styles.availProgressLeft}>Step 6 of 12</Text>
-                  <Text style={styles.availProgressRight}>50%</Text>
-                </View>
-                <View style={styles.availProgressTrack}>
-                  <View style={styles.availProgressFill} />
-                </View>
-              </View>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(5)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -1351,41 +1629,18 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.availFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(5)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(7)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(7)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 7 ? (
           <>
-            <View style={styles.amenHeader}>
-              <TouchableOpacity style={styles.amenBackBtn} activeOpacity={0.9} onPress={() => setStep(6)}>
-                <MaterialIcons name="arrow-back" size={24} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.amenHeaderTitle}>Add Property</Text>
-              <TouchableOpacity style={styles.amenCancelBtn} activeOpacity={0.9} onPress={() => setStep(1)}>
-                <Text style={styles.amenCancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.amenProgress}>
-              <View style={styles.amenProgressTop}>
-                <Text style={styles.amenProgressStep}>Step 7 of 12</Text>
-                <Text style={styles.amenProgressPct}>58%</Text>
-              </View>
-              <View style={styles.amenProgressTrack}>
-                <View style={styles.amenProgressFill} />
-              </View>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(6)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -1400,59 +1655,106 @@ export default function AdsScreen({ navigation }) {
                   </Text>
                 </View>
 
-                <View style={styles.amenGrid}>
-                  {amenityItems.map((a) => {
+                <View style={styles.amenTagWrap}>
+                  {amenityOptions.map((a) => {
                     const active = selectedAmenities.includes(a.id);
                     return (
-                      <AmenityCard
+                      <TouchableOpacity
                         key={a.id}
-                        label={a.label}
-                        icon={a.icon}
-                        selected={active}
+                        style={[styles.amenTag, active && styles.amenTagSelected]}
+                        activeOpacity={0.9}
                         onPress={() => {
                           setSelectedAmenities((prev) =>
                             prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id],
                           );
                         }}
-                      />
+                      >
+                        <Text style={[styles.amenTagText, active && styles.amenTagTextSelected]}>{a.label}</Text>
+                      </TouchableOpacity>
                     );
                   })}
 
-                  <TouchableOpacity style={styles.amenAddCard} activeOpacity={0.9} onPress={() => {}}>
-                    <MaterialIcons name="add" size={28} color="#2563eb" />
-                    <Text style={styles.amenAddText}>Add amenity</Text>
+                  <TouchableOpacity
+                    style={styles.amenAddTag}
+                    activeOpacity={0.9}
+                    onPress={() => setAmenityInputOpen((prev) => !prev)}
+                  >
+                    <MaterialIcons name="add" size={18} color="#2563eb" />
+                    <Text style={styles.amenAddTagText}>Add amenity</Text>
                   </TouchableOpacity>
                 </View>
+
+                {amenityInputOpen ? (
+                  <View style={styles.amenAddInputRow}>
+                    <TextInput
+                      value={amenityInputText}
+                      onChangeText={setAmenityInputText}
+                      style={styles.amenAddInput}
+                      placeholder="e.g. Gym, Lift, Swimming Pool"
+                      placeholderTextColor="#94a3b8"
+                      autoCapitalize="words"
+                    />
+                    <TouchableOpacity
+                      style={styles.amenAddBtn}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        const parts = amenityInputText
+                          .split(',')
+                          .map((x) => x.trim())
+                          .filter(Boolean);
+
+                        if (!parts.length) return;
+
+                        setAmenityOptions((prev) => {
+                          const existingLabels = new Set(prev.map((x) => x.label.toLowerCase()));
+                          const next = [...prev];
+
+                          parts.forEach((label) => {
+                            const lower = label.toLowerCase();
+                            if (existingLabels.has(lower)) return;
+
+                            const id = `custom_${lower.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
+                            next.push({ id, label, icon: 'check' });
+                            existingLabels.add(lower);
+                          });
+
+                          return next;
+                        });
+
+                        setSelectedAmenities((prev) => {
+                          const existing = new Set(prev);
+                          const toAdd = parts
+                            .map((label) => label.toLowerCase())
+                            .map((lower) => `custom_${lower.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`)
+                            .filter((id) => !existing.has(id));
+                          return toAdd.length ? [...prev, ...toAdd] : prev;
+                        });
+
+                        setAmenityInputText('');
+                        setAmenityInputOpen(false);
+                      }}
+                    >
+                      <Text style={styles.amenAddBtnText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
             </ScrollView>
 
             <View style={styles.amenFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(6)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(8)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(8)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 8 ? (
           <>
-            <View style={styles.rulesHeader}>
-              <TouchableOpacity style={styles.rulesHeaderBtn} activeOpacity={0.9} onPress={() => setStep(7)}>
-                <MaterialIcons name="arrow-back" size={22} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.rulesHeaderTitle}>Add Property</Text>
-              <TouchableOpacity style={styles.rulesHeaderRight} activeOpacity={0.9} onPress={saveDraft}>
-                <Text style={styles.rulesHeaderRightText}>Save Draft</Text>
-              </TouchableOpacity>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(7)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -1460,13 +1762,6 @@ export default function AdsScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.rulesProgressBlock}>
-                <View style={styles.rulesProgressTop}>
-                  <Text style={styles.rulesProgressStep}>Step 8 of 12</Text>
-                  <Text style={styles.rulesProgressPct}>66% Completed</Text>
-                </View>
-                <View style={styles.rulesProgressTrack}>
-                  <View style={styles.rulesProgressFill} />
-                </View>
                 <Text style={styles.rulesTitle}>Tenant Rules & Preferences</Text>
                 <Text style={styles.rulesSub}>
                   Set clear expectations for future tenants regarding lifestyle and property usage.
@@ -1603,45 +1898,24 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.rulesFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(7)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(9)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(9)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 9 ? (
           <>
-            <View style={styles.prefHeader}>
-              <TouchableOpacity style={styles.prefHeaderBtn} activeOpacity={0.9} onPress={() => setStep(8)}>
-                <MaterialIcons name="arrow-back-ios-new" size={22} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.prefHeaderTitle}>Tenant Preference</Text>
-              <View style={styles.prefHeaderSpacer} />
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(8)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.prefScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.prefProgressBlock}>
-                <View style={styles.prefProgressTop}>
-                  <Text style={styles.prefProgressLeft}>Step 9 of 12</Text>
-                  <Text style={styles.prefProgressRight}>75% Completed</Text>
-                </View>
-                <View style={styles.prefProgressTrack}>
-                  <View style={styles.prefProgressFill} />
-                </View>
-              </View>
-
               <View style={styles.prefSection}>
                 <Text style={styles.prefH2}>Who are you looking for?</Text>
                 <Text style={styles.prefP}>Select the type of tenants you prefer for your property.</Text>
@@ -1715,42 +1989,18 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.prefFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(8)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(10)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(10)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 10 ? (
           <>
-            <View style={styles.secHeader}>
-              <View style={styles.secHeaderTop}>
-                <TouchableOpacity style={styles.secHeaderIconBtn} activeOpacity={0.9} onPress={() => setStep(9)}>
-                  <MaterialIcons name="arrow-back" size={22} color="#0f172a" />
-                </TouchableOpacity>
-                <Text style={styles.secHeaderTitle}>Add Property</Text>
-                <TouchableOpacity style={styles.secHeaderHelpBtn} activeOpacity={0.9} onPress={() => {}}>
-                  <Text style={styles.secHeaderHelpText}>Help</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.secProgressTrack}>
-                <View style={styles.secProgressFill} />
-              </View>
-
-              <View style={styles.secStepRow}>
-                <Text style={styles.secStepLeft}>Step 10 of 12</Text>
-                <Text style={styles.secStepRight}>Security</Text>
-              </View>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(9)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
@@ -1849,46 +2099,25 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.secFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(9)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => setStep(11)}>
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(11)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 11 ? (
           <>
-            <View style={styles.vcHeader}>
-              <TouchableOpacity style={styles.vcHeaderBtn} activeOpacity={0.9} onPress={() => setStep(10)}>
-                <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
-              </TouchableOpacity>
-              <Text style={styles.vcHeaderTitle}>Add Property</Text>
-              <TouchableOpacity style={styles.vcHeaderHelp} activeOpacity={0.9} onPress={() => {}}>
-                <Text style={styles.vcHeaderHelpText}>Help</Text>
-              </TouchableOpacity>
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(10)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.vcScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.vcProgressBlock}>
-                <View style={styles.vcProgressTop}>
-                  <Text style={styles.vcProgressLeft}>Step 11 of 12</Text>
-                  <Text style={styles.vcProgressRight}>92%</Text>
-                </View>
-                <View style={styles.vcProgressTrack}>
-                  <View style={styles.vcProgressFill} />
-                </View>
-              </View>
+              <View style={styles.vcBody}>
 
               <View style={styles.vcTitleBlock}>
                 <Text style={styles.vcH1}>Visit & Contact Preferences</Text>
@@ -2005,53 +2234,29 @@ export default function AdsScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
               </View>
+            </View>
             </ScrollView>
 
             <View style={styles.vcFooter}>
               <View style={styles.footerRow}>
-                <TouchableOpacity style={styles.footerBackBtn} activeOpacity={0.9} onPress={() => setStep(10)}>
-                  <Text style={styles.footerBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.footerNextBtn}
-                  activeOpacity={0.9}
-                  onPress={() => setStep((prev) => (typeof prev === 'number' ? Math.min(12, prev + 1) : 12))}
-                >
+                <TouchableOpacity style={styles.footerNextBtn} activeOpacity={0.9} onPress={() => goToStep(12)}>
                   <Text style={styles.footerNextText}>Next</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.footerDraftRow}>
-                <TouchableOpacity style={styles.footerDraftLink} activeOpacity={0.9} onPress={saveDraft}>
-                  <Text style={styles.footerDraftText}>Save as Draft</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </>
         ) : step === 12 ? (
           <>
-            <View style={styles.pubHeader}>
-              <TouchableOpacity style={styles.pubHeaderBtn} activeOpacity={0.9} onPress={() => setStep(11)}>
-                <MaterialIcons name="arrow-back" size={24} color="#111418" />
-              </TouchableOpacity>
-              <Text style={styles.pubHeaderTitle}>Agreement & Publishing</Text>
-              <View style={styles.pubHeaderSpacer} />
-            </View>
+            <AddPropertyTopBar title="Add Property" step={step} totalSteps={12} onBack={() => setStep(11)} onCancel={requestCancel} />
 
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.pubScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.pubProgress}>
-                <View style={styles.pubProgressTop}>
-                  <Text style={styles.pubProgressLeft}>Step 12 of 12</Text>
-                  <Text style={styles.pubProgressRight}>95%</Text>
-                </View>
-                <View style={styles.pubProgressTrack}>
-                  <View style={styles.pubProgressFill} />
-                </View>
-              </View>
-
               <View style={styles.pubBody}>
                 <View style={styles.pubCard}>
                   <View style={styles.pubCardHead}>
@@ -2124,7 +2329,7 @@ export default function AdsScreen({ navigation }) {
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.pubPreviewBtn} activeOpacity={0.9} onPress={() => {}}>
+                <TouchableOpacity style={styles.pubPreviewBtn} activeOpacity={0.9} onPress={openPreviewValidated}>
                   <MaterialIcons name="visibility" size={20} color="#111418" />
                   <Text style={styles.pubPreviewText}>Preview Property</Text>
                 </TouchableOpacity>
@@ -2137,66 +2342,64 @@ export default function AdsScreen({ navigation }) {
 
             <View style={styles.pubFooter}>
               <View style={styles.pubFooterRow}>
-                <TouchableOpacity style={styles.pubFooterBack} activeOpacity={0.9} onPress={() => setStep(11)}>
-                  <Text style={styles.pubFooterBackText}>Back</Text>
+                <TouchableOpacity style={styles.footerDraftBtn} activeOpacity={0.9} onPress={saveDraft}>
+                  <Text style={styles.footerDraftBtnText}>Save as Draft</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.pubFooterPublish} activeOpacity={0.9} onPress={publishFromDraft}>
-                  <Text style={styles.pubFooterPublishText}>Publish Property</Text>
+                  <Text style={styles.pubFooterPublishText}>Publish</Text>
                 </TouchableOpacity>
               </View>
             </View>
-
-            <Modal visible={cancelModalVisible} transparent animationType="fade" onRequestClose={() => setCancelModalVisible(false)}>
-              <View style={styles.cancelOverlay}>
-                <View style={styles.cancelCard}>
-                  <Text style={styles.cancelTitle}>Cancel listing?</Text>
-                  <Text style={styles.cancelSub}>Are you sure you want to cancel? You can save as draft and continue later.</Text>
-
-                  <View style={styles.cancelBtns}>
-                    <TouchableOpacity style={styles.cancelBtnGhost} activeOpacity={0.9} onPress={() => setCancelModalVisible(false)}>
-                      <Text style={styles.cancelBtnGhostText}>Continue Editing</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.cancelBtnGhost}
-                      activeOpacity={0.9}
-                      onPress={async () => {
-                        try {
-                          await saveDraft();
-                        } catch (e) {
-                          // ignore
-                        }
-                        setCancelModalVisible(false);
-                        navigateToPropertyList();
-                      }}
-                    >
-                      <Text style={styles.cancelBtnGhostText}>Save as Draft</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.cancelBtnDanger}
-                      activeOpacity={0.9}
-                      onPress={() => {
-                        setCancelModalVisible(false);
-                        navigateToPropertyList();
-                      }}
-                    >
-                      <Text style={styles.cancelBtnDangerText}>Discard</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
           </>
         ) : null}
-      </View>
+      </LinearGradient>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  layoutContent: { paddingHorizontal: 0, paddingVertical: 0, backgroundColor: '#ffffff' },
-  root: { flex: 1, backgroundColor: '#ffffff' },
+  layoutContent: { paddingHorizontal: 0, paddingVertical: 0, backgroundColor: 'transparent' },
+  root: { flex: 1 },
+  apTopWrap: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(17, 24, 39, 0.08)',
+  },
+  apHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  apHeaderLeft: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  apHeaderTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  apHeaderRight: { width: 56, alignItems: 'flex-end', justifyContent: 'center', height: 40 },
+  apHeaderRightText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
+  apProgressWrap: { paddingHorizontal: 16, paddingBottom: 14 },
+  apProgressTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  apProgressStep: { fontSize: 12, fontWeight: '700', color: '#111827' },
+  apProgressPercent: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
+  apProgressBar: {
+    height: 6,
+    width: '100%',
+    backgroundColor: 'rgba(37, 99, 235, 0.18)',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  apProgressFill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 999 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2204,8 +2407,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    backgroundColor: '#ffffff',
+    borderBottomColor: 'rgba(17, 24, 39, 0.08)',
+    backgroundColor: 'transparent',
   },
   headerIconBtn: {
     width: 40,
@@ -2217,45 +2420,45 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111418',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
   },
   headerHelpBtn: { width: 56, alignItems: 'flex-end', justifyContent: 'center', height: 40 },
-  headerHelpText: { fontSize: 14, fontWeight: '600', color: '#617289' },
+  headerHelpText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
 
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 120 },
 
-  progressWrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
+  progressWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14 },
   progressTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  progressStep: { fontSize: 14, fontWeight: '700', color: '#111418' },
-  progressPercent: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
-  progressBar: { height: 8, width: '100%', backgroundColor: '#dbe0e6', borderRadius: 999, overflow: 'hidden' },
+  progressStep: { fontSize: 12, fontWeight: '700', color: '#111827' },
+  progressPercent: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
+  progressBar: { height: 6, width: '100%', backgroundColor: 'rgba(37, 99, 235, 0.18)', borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: '100%', width: '8%', backgroundColor: '#2563eb', borderRadius: 999 },
-  progressHint: { marginTop: 8, fontSize: 14, color: '#617289', fontWeight: '500' },
+  progressHint: { marginTop: 6, fontSize: 13, color: '#6b7280', fontWeight: '600' },
 
   headline: { paddingHorizontal: 16, paddingBottom: 8 },
-  headlineTitle: { fontSize: 24, fontWeight: '800', color: '#111418', letterSpacing: -0.2 },
-  headlineSub: { marginTop: 4, fontSize: 14, fontWeight: '500', color: '#617289' },
+  headlineTitle: { fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: 0 },
+  headlineSub: { marginTop: 4, fontSize: 12, fontWeight: '600', color: '#6b7280' },
 
-  form: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 24 },
+  form: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24, gap: 18 },
   field: { gap: 8 },
   fieldWide: { gap: 12 },
-  label: { fontSize: 14, fontWeight: '700', color: '#111418' },
+  label: { fontSize: 12, fontWeight: '700', color: '#111827' },
   input: {
     width: '100%',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#dbe0e6',
+    borderColor: 'rgba(17, 24, 39, 0.18)',
     backgroundColor: '#ffffff',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#111418',
+    fontSize: 14,
+    color: '#111827',
   },
 
-  segment: { flexDirection: 'row', padding: 4, backgroundColor: '#f0f2f4', borderRadius: 8 },
+  segment: { flexDirection: 'row', padding: 4, backgroundColor: 'rgba(255, 255, 255, 0.55)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(17, 24, 39, 0.10)' },
   segmentItem: { flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   segmentItemActive: {
     backgroundColor: '#ffffff',
@@ -2265,8 +2468,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  segmentText: { fontSize: 14, fontWeight: '500', color: '#617289' },
-  segmentTextActive: { color: '#111418', fontWeight: '700' },
+  segmentText: { fontSize: 13, fontWeight: '700', color: '#6b7280' },
+  segmentTextActive: { color: '#111827', fontWeight: '800' },
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: {
@@ -2297,9 +2500,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#f3f4f6',
   },
   footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  footerDraftRow: { alignItems: 'center', marginTop: 10 },
-  footerDraftLink: { paddingVertical: 8, paddingHorizontal: 8 },
-  footerDraftText: { fontSize: 14, fontWeight: '600', color: '#617289' },
   footerBackBtn: {
     height: 48,
     paddingHorizontal: 18,
@@ -2311,6 +2511,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   footerBackText: { fontSize: 14, fontWeight: '800', color: '#111418' },
+  footerCancelBtn: {
+    flex: 1,
+    height: 48,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerCancelText: { fontSize: 14, fontWeight: '800', color: '#111418' },
+  footerDraftBtn: {
+    flex: 1,
+    height: 48,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerDraftBtnText: { fontSize: 14, fontWeight: '800', color: '#2563eb' },
   footerNextBtn: {
     height: 48,
     flex: 1,
@@ -2402,7 +2626,7 @@ const styles = StyleSheet.create({
   mediaScrollContent: { paddingBottom: 160 },
   mediaBody: { paddingHorizontal: 16, paddingTop: 24, gap: 20 },
   mediaHeadline: { gap: 4 },
-  mediaHeadlineTitle: { fontSize: 28, fontWeight: '800', color: '#111418', letterSpacing: -0.2 },
+  mediaHeadlineTitle: { fontSize: 18, fontWeight: '800', color: '#111418', letterSpacing: -0.2 },
   mediaHeadlineSub: { fontSize: 16, fontWeight: '400', color: '#617289', lineHeight: 22 },
 
   mediaCard: {
@@ -2599,7 +2823,7 @@ const styles = StyleSheet.create({
   addrProgressFill: { height: '100%', width: '25%', backgroundColor: '#2563eb', borderRadius: 999 },
 
   addrTitleWrap: { gap: 4 },
-  addrTitle: { fontSize: 24, fontWeight: '800', color: '#111418', letterSpacing: -0.2 },
+  addrTitle: { fontSize: 18, fontWeight: '800', color: '#111418', letterSpacing: -0.2 },
   addrSub: { fontSize: 14, color: '#617289', fontWeight: '500' },
 
   addrFieldBlock: { gap: 8 },
@@ -2747,7 +2971,7 @@ const styles = StyleSheet.create({
   areaScrollContent: { paddingBottom: 120 },
   areaBody: { paddingHorizontal: 16, paddingTop: 16 },
   areaHeadline: { marginBottom: 32 },
-  areaHeadlineTitle: { fontSize: 24, fontWeight: '800', color: '#111418', marginBottom: 8, letterSpacing: -0.2 },
+  areaHeadlineTitle: { fontSize: 18, fontWeight: '800', color: '#111418', marginBottom: 8, letterSpacing: -0.2 },
   areaHeadlineSub: { fontSize: 16, fontWeight: '400', color: '#6b7280', lineHeight: 22 },
 
   areaForm: { gap: 24, paddingBottom: 12 },
@@ -2986,9 +3210,9 @@ const styles = StyleSheet.create({
   availProgressFill: { height: '100%', width: '50%', backgroundColor: '#2563eb', borderTopRightRadius: 999, borderBottomRightRadius: 999 },
 
   availScrollContent: { paddingBottom: 160 },
-  availBody: { paddingHorizontal: 16, paddingTop: 16, width: '100%', maxWidth: 520, alignSelf: 'center', gap: 16 },
+  availBody: { paddingHorizontal: 16, paddingTop: 16, width: '100%', maxWidth: ADS_FORM_MAX_WIDTH, alignSelf: 'center', gap: 16 },
   availIntro: { paddingVertical: 8 },
-  availIntroTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a', letterSpacing: -0.2 },
+  availIntroTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 },
   availIntroSub: { marginTop: 4, fontSize: 14, fontWeight: '500', color: '#64748b' },
 
   availCard: {
@@ -3065,7 +3289,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
-  availFooterRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, width: '100%', maxWidth: 520, alignSelf: 'center' },
+  availFooterRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, width: '100%', maxWidth: ADS_FORM_MAX_WIDTH, alignSelf: 'center' },
   availFooterBack: { height: 48, paddingHorizontal: 18, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', justifyContent: 'center' },
   availFooterBackText: { fontSize: 14, fontWeight: '700', color: '#475569' },
   availFooterMid: { flex: 1, alignItems: 'center' },
@@ -3119,8 +3343,54 @@ const styles = StyleSheet.create({
   amenScrollContent: { paddingBottom: 160 },
   amenBody: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 0 },
   amenHeadline: { marginBottom: 24 },
-  amenHeadlineTitle: { fontSize: 30, fontWeight: '900', color: '#111418', letterSpacing: -0.2, marginBottom: 8 },
+  amenHeadlineTitle: { fontSize: 18, fontWeight: '800', color: '#111418', letterSpacing: -0.2, marginBottom: 8 },
   amenHeadlineSub: { fontSize: 16, fontWeight: '400', color: '#617289', lineHeight: 22 },
+
+  amenTagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  amenTag: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#dbe0e6',
+    backgroundColor: '#ffffff',
+  },
+  amenTagSelected: { borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.10)' },
+  amenTagText: { fontSize: 14, fontWeight: '500', color: '#617289' },
+  amenTagTextSelected: { fontWeight: '700', color: '#2563eb' },
+  amenAddTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    backgroundColor: '#ffffff',
+  },
+  amenAddTagText: { fontSize: 14, fontWeight: '700', color: '#2563eb' },
+  amenAddInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  amenAddInput: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(17, 24, 39, 0.18)',
+    backgroundColor: '#ffffff',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: '#111827',
+  },
+  amenAddBtn: {
+    height: 44,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  amenAddBtnText: { fontSize: 14, fontWeight: '800', color: '#ffffff' },
 
   amenGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   amenCard: {
@@ -3199,7 +3469,7 @@ const styles = StyleSheet.create({
   rulesProgressPct: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
   rulesProgressTrack: { height: 8, borderRadius: 999, backgroundColor: '#e5e7eb', overflow: 'hidden' },
   rulesProgressFill: { height: '100%', width: '66%', borderRadius: 999, backgroundColor: '#2563eb' },
-  rulesTitle: { marginTop: 2, fontSize: 24, fontWeight: '900', color: '#111418' },
+  rulesTitle: { marginTop: 2, fontSize: 18, fontWeight: '800', color: '#111418' },
   rulesSub: { fontSize: 13, fontWeight: '500', color: '#617289', lineHeight: 18 },
   rulesDivider: { height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 24, marginTop: 10, marginBottom: 16 },
 
@@ -3345,15 +3615,15 @@ const styles = StyleSheet.create({
   prefHeaderSpacer: { width: 40, height: 40 },
   prefScrollContent: { paddingTop: 56, paddingBottom: 140 },
 
-  prefProgressBlock: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10, backgroundColor: '#ffffff' },
+  prefProgressBlock: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10, backgroundColor: 'transparent' },
   prefProgressTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   prefProgressLeft: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
   prefProgressRight: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
   prefProgressTrack: { height: 8, borderRadius: 999, backgroundColor: '#f3f4f6', overflow: 'hidden' },
   prefProgressFill: { height: '100%', width: '75%', borderRadius: 999, backgroundColor: '#2563eb' },
 
-  prefSection: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, backgroundColor: '#ffffff' },
-  prefH2: { fontSize: 24, fontWeight: '900', color: '#111418', marginBottom: 6 },
+  prefSection: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, backgroundColor: 'transparent' },
+  prefH2: { fontSize: 18, fontWeight: '800', color: '#111418', marginBottom: 6 },
   prefP: { fontSize: 13, fontWeight: '600', color: '#6b7280', marginBottom: 16 },
   prefChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   prefChip: {
@@ -3370,7 +3640,7 @@ const styles = StyleSheet.create({
   prefChipText: { fontSize: 13, fontWeight: '700', color: '#374151' },
   prefChipTextSelected: { color: '#2563eb' },
 
-  prefSection2: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, backgroundColor: '#ffffff', marginTop: 8 },
+  prefSection2: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, backgroundColor: 'transparent', marginTop: 8 },
   prefH3: { fontSize: 18, fontWeight: '900', color: '#111418', marginBottom: 14 },
   prefRuleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   prefRuleLeft: { flex: 1, paddingRight: 12 },
@@ -3417,7 +3687,7 @@ const styles = StyleSheet.create({
   secScrollContent: { paddingBottom: 150 },
   secBody: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   secHeadline: { marginBottom: 4 },
-  secH2: { fontSize: 24, fontWeight: '900', color: '#0f172a', letterSpacing: -0.2 },
+  secH2: { fontSize: 18, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 },
   secP: { marginTop: 8, fontSize: 14, fontWeight: '500', color: '#64748b', lineHeight: 20 },
   secPStrong: { fontWeight: '900', color: '#2563eb' },
 
@@ -3521,7 +3791,7 @@ const styles = StyleSheet.create({
   vcProgressFill: { height: '100%', width: '92%', borderRadius: 999, backgroundColor: '#2563eb' },
 
   vcTitleBlock: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10 },
-  vcH1: { fontSize: 24, fontWeight: '900', color: '#0f172a', marginBottom: 8 },
+  vcH1: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
   vcSub: { fontSize: 13, fontWeight: '600', color: '#64748b', lineHeight: 18 },
 
   vcSection: { paddingHorizontal: 20, paddingTop: 12 },
@@ -3741,6 +4011,8 @@ const styles = StyleSheet.create({
   cancelBtns: { marginTop: 16, gap: 10 },
   cancelBtnGhost: { paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
   cancelBtnGhostText: { fontSize: 14, fontWeight: '900', color: '#111418' },
+  cancelBtnPrimary: { paddingVertical: 12, borderRadius: 12, backgroundColor: '#2563eb', alignItems: 'center' },
+  cancelBtnPrimaryText: { fontSize: 14, fontWeight: '900', color: '#ffffff' },
   cancelBtnDanger: { paddingVertical: 12, borderRadius: 12, backgroundColor: '#ef4444', alignItems: 'center' },
   cancelBtnDangerText: { fontSize: 14, fontWeight: '900', color: '#ffffff' },
 });

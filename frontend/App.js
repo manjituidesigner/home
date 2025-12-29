@@ -41,6 +41,33 @@ const Drawer = createDrawerNavigator();
 
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const USER_PROFILE_STORAGE_KEY = 'USER_PROFILE';
+const STORAGE_SCHEMA_VERSION_KEY = 'APP_STORAGE_SCHEMA_VERSION';
+const STORAGE_SCHEMA_VERSION = '2025-12-28-2';
+
+function clearWebLocalStorageForKeys(keys) {
+  try {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const storage = window?.localStorage;
+    if (!storage) return;
+    const targets = (Array.isArray(keys) ? keys : []).map((k) => String(k));
+    const toRemove = [];
+    for (let i = 0; i < storage.length; i += 1) {
+      const k = storage.key(i);
+      if (!k) continue;
+      for (const t of targets) {
+        if (k === t || k.endsWith(`:${t}`) || k.endsWith(`/${t}`)) {
+          toRemove.push(k);
+          break;
+        }
+      }
+    }
+    toRemove.forEach((k) => {
+      try {
+        storage.removeItem(k);
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
 
 function WebMobileFrame({ children }) {
   const [viewport, setViewport] = useState(() => {
@@ -53,27 +80,14 @@ function WebMobileFrame({ children }) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
-    const html = document?.documentElement;
     const body = document?.body;
-    const prevHtmlOverflow = html?.style?.overflow;
-    const prevBodyOverflow = body?.style?.overflow;
     const prevBodyMargin = body?.style?.margin;
-
-    if (html?.style) html.style.overflow = 'hidden';
     if (body?.style) {
-      body.style.overflow = 'hidden';
       body.style.margin = '0';
     }
 
-    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    onResize();
-
     return () => {
-      window.removeEventListener('resize', onResize);
-      if (html?.style) html.style.overflow = prevHtmlOverflow || '';
       if (body?.style) {
-        body.style.overflow = prevBodyOverflow || '';
         body.style.margin = prevBodyMargin || '';
       }
     };
@@ -81,17 +95,9 @@ function WebMobileFrame({ children }) {
 
   if (Platform.OS !== 'web') return children;
 
-  const frameHeight = viewport.height ? Math.max(0, viewport.height - 40) : 640;
-
   return (
-    <View style={[styles.webPage, viewport.height ? { height: viewport.height } : null]}>
-      <View style={styles.webPageContent}>
-        <View style={styles.webFrameSlot}>
-          <View style={[styles.webFrame, { height: frameHeight }]}>
-            <View style={styles.webFrameInner}>{children}</View>
-          </View>
-        </View>
-      </View>
+    <View style={styles.webPage}>
+      <View style={styles.webMaxWidthInner}>{children}</View>
     </View>
   );
 }
@@ -99,8 +105,23 @@ function WebMobileFrame({ children }) {
 function MainDrawer() {
   return (
     <Drawer.Navigator
+      id="MainDrawer"
       drawerContent={(props) => <CustomDrawer {...props} />}
-      screenOptions={{ headerShown: false }}
+      defaultStatus="closed"
+      screenListeners={({ navigation }) => ({
+        focus: () => {
+          if (Platform.OS === 'web' && navigation?.closeDrawer) {
+            navigation.closeDrawer();
+          }
+        },
+      })}
+      screenOptions={{
+        headerShown: false,
+        drawerType: 'front',
+        overlayColor: 'rgba(0,0,0,0.35)',
+        drawerStyle: Platform.OS === 'web' ? { width: 280 } : undefined,
+        swipeEnabled: Platform.OS !== 'web',
+      }}
     >
       <Drawer.Screen name="Dashboard" component={DashboardScreen} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
@@ -149,6 +170,36 @@ export default function App() {
     let mounted = true;
     (async () => {
       try {
+        if (Platform.OS === 'web') {
+          // eslint-disable-next-line no-console
+          console.log('[APP_BUILD]', STORAGE_SCHEMA_VERSION);
+        }
+
+        const storedSchemaVersion = await AsyncStorage.getItem(STORAGE_SCHEMA_VERSION_KEY);
+        if (storedSchemaVersion !== STORAGE_SCHEMA_VERSION) {
+          clearWebLocalStorageForKeys([
+            AUTH_TOKEN_STORAGE_KEY,
+            USER_PROFILE_STORAGE_KEY,
+            STORAGE_SCHEMA_VERSION_KEY,
+            'PROFILE_SCREEN_DATA',
+            'WISHLIST_PROPERTIES',
+            'OFFER_SUBMISSIONS_V1',
+          ]);
+          await AsyncStorage.multiRemove([
+            AUTH_TOKEN_STORAGE_KEY,
+            USER_PROFILE_STORAGE_KEY,
+            'PROFILE_SCREEN_DATA',
+            'WISHLIST_PROPERTIES',
+            'OFFER_SUBMISSIONS_V1',
+          ]);
+          await AsyncStorage.setItem(STORAGE_SCHEMA_VERSION_KEY, STORAGE_SCHEMA_VERSION);
+          setSessionToken(null);
+          setSessionUser(null);
+          if (mounted) {
+            setIsAuthed(false);
+          }
+        }
+
         const [token, userJson] = await Promise.all([
           AsyncStorage.getItem(AUTH_TOKEN_STORAGE_KEY),
           AsyncStorage.getItem(USER_PROFILE_STORAGE_KEY),
@@ -221,37 +272,13 @@ export default function App() {
 const styles = StyleSheet.create({
   webPage: {
     width: '100%',
-    backgroundColor: '#0b0f19',
-    overflow: 'hidden',
-  },
-  webPageContent: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
     flex: 1,
-  },
-  webFrameSlot: {
+    backgroundColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  webFrame: {
-    width: 360,
-    height: 915,
-    backgroundColor: '#ffffff',
-    overflow: 'hidden',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 20,
-  },
-  webFrameInner: {
+  webMaxWidthInner: {
     flex: 1,
     width: '100%',
-    height: '100%',
+    maxWidth: 412,
   },
 });

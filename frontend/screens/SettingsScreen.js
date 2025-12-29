@@ -8,7 +8,11 @@ export default function SettingsScreen({ navigation }) {
     <ScreenLayout
       title="Settings"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}

@@ -691,6 +691,10 @@ export default function ProfileScreen({ navigation }) {
     <ScreenLayout
       title="Profile"
       onPressMenu={() => {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
         if (navigation?.openDrawer) {
           navigation.openDrawer();
         }

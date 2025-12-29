@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ScreenLayout from '../layouts/ScreenLayout';
@@ -26,6 +26,8 @@ import { API_BASE_URL } from '../apiBaseUrl';
 
 const AUTH_TOKEN_STORAGE_KEY = 'AUTH_TOKEN';
 const PROPERTY_DRAFT_STORAGE_KEY = 'PROPERTY_DRAFT_V1';
+
+const PROPERTY_FORM_MAX_WIDTH = Platform.OS === 'web' ? 960 : 520;
 
 const PROPERTY_CATEGORIES = [
   { id: 'flat', label: 'Flat / Apartment', icon: 'home-outline' },
@@ -626,7 +628,7 @@ export default function PropertyScreen({ navigation, route }) {
     updateActiveProperty({ photos: next });
   };
 
-  const fetchPropertyList = async () => {
+  const fetchPropertyList = useCallback(async () => {
     try {
       setLoadingList(true);
       const authHeaders = await getAuthHeaders();
@@ -645,11 +647,13 @@ export default function PropertyScreen({ navigation, route }) {
     } finally {
       setLoadingList(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPropertyList();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPropertyList();
+    }, [fetchPropertyList])
+  );
 
   const handleSaveProperty = async () => {
     console.log('handleSaveProperty called with', activeProperty);
@@ -829,7 +833,11 @@ export default function PropertyScreen({ navigation, route }) {
         </TouchableOpacity>
       }
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}
@@ -1034,7 +1042,7 @@ const styles = StyleSheet.create({
   },
   addContainer: {
     flex: 1,
-    maxWidth: 420,
+    maxWidth: PROPERTY_FORM_MAX_WIDTH,
     alignSelf: 'center',
     backgroundColor: 'transparent',
   },
@@ -1137,7 +1145,7 @@ const styles = StyleSheet.create({
   },
   addScroll: { flex: 1, minHeight: 0 },
   addScrollContent: { paddingHorizontal: 16, paddingBottom: 140 },
-  addInner: { maxWidth: 520, width: '100%', alignSelf: 'center' },
+  addInner: { maxWidth: PROPERTY_FORM_MAX_WIDTH, width: '100%', alignSelf: 'center' },
   addCard: {
     backgroundColor: '#ffffff',
     borderRadius: 18,

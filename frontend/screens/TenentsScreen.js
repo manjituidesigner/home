@@ -162,7 +162,11 @@ export default function TenentsScreen({ navigation }) {
     <ScreenLayout
       title="Tenents"
       onPressMenu={() => {
-        if (navigation && navigation.openDrawer) {
+        if (navigation?.toggleDrawer) {
+          navigation.toggleDrawer();
+          return;
+        }
+        if (navigation?.openDrawer) {
           navigation.openDrawer();
         }
       }}
