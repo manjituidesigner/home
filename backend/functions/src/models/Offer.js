@@ -1,0 +1,36 @@
+const mongoose = require('mongoose');
+
+const OfferSchema = new mongoose.Schema(
+  {
+    propertyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Property', required: true, index: true },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    offerRent: { type: Number, required: true },
+    joiningDateEstimate: { type: String, trim: true, required: true },
+    offerAdvance: { type: Number },
+    offerBookingAmount: { type: Number },
+    needsBikeParking: { type: Boolean, default: false },
+    needsCarParking: { type: Boolean, default: false },
+    tenantType: { type: String, trim: true },
+    acceptsRules: { type: Boolean, default: false },
+    matchPercent: { type: Number, default: 0 },
+    status: { type: String, enum: ['pending', 'accepted', 'rejected', 'on_hold'], default: 'pending' },
+    actionType: { type: String, enum: ['advance_requested', 'none'], default: 'none' },
+    requestedAdvanceAmount: { type: Number },
+    requestedAdvanceValidityDays: { type: Number },
+    proposedMeetingTime: { type: Date },
+    desiredJoiningDate: { type: Date },
+
+    bookingVerified: { type: Boolean, default: false, index: true },
+    bookingVerifiedAt: { type: Date },
+
+    tenantMoveInConfirmed: { type: Boolean, default: false, index: true },
+    tenantMoveInConfirmedAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+OfferSchema.index({ ownerId: 1, propertyId: 1, createdAt: -1 });
+OfferSchema.index({ tenantId: 1, propertyId: 1, createdAt: -1 });
+
+module.exports = mongoose.model('Offer', OfferSchema);
